@@ -1,0 +1,30 @@
+{
+  "name": "@cfe/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json && node --enable-source-maps dist/main.js",
+    "dev:scheduler": "tsc -p tsconfig.build.json && node --enable-source-maps dist/scheduler.js",
+    "start": "node dist/main.js",
+    "start:scheduler": "node dist/scheduler.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cfe/business-rules": "workspace:*",
+    "@cfe/database": "workspace:*",
+    "@cfe/integration-sdk": "workspace:*",
+    "@cfe/shared-types": "workspace:*",
+    "bullmq": "5.61.0",
+    "ioredis": "5.8.2",
+    "nodemailer": "7.0.9",
+    "zod": "4.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.12",
+    "@types/nodemailer": "7.0.2",
+    "typescript": "5.9.3",
+    "vitest": "4.0.5"
+  }
+}

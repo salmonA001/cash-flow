@@ -684,6 +684,9 @@ model DownloadEntitlement {
   status           EntitlementStatus @default(ACTIVE)
   revokedAt        DateTime?
   revokedReason    String?
+  /// Set once the link email is delivered. If unset on retry, the token is rotated and re-sent
+  /// (the raw token is never stored, so a lost email cannot be recovered any other way).
+  emailSentAt      DateTime?
   createdAt        DateTime          @default(now())
 
   organization   Organization    @relation(fields: [organizationId], references: [id])
