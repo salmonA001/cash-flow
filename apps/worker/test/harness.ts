@@ -137,7 +137,7 @@ export function buildContext(prisma: PrismaClient) {
     prisma,
     storage,
     mailer,
-    appUrl: 'https://app.test',
+    apiUrl: 'https://api.test',
     shopify: async () => shopify,
     printful: async () => printful,
   };

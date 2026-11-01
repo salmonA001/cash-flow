@@ -12,7 +12,7 @@ export interface WorkerContext {
   prisma: PrismaClient;
   storage: WorkerStorage;
   mailer: Mailer;
-  appUrl: string;
+  apiUrl: string;
   shopify(organizationId: string): Promise<Pick<ShopifyClient, 'getOrder' | 'listOrderIdsUpdatedSince'>>;
   printful(organizationId: string): Promise<FulfillmentProvider>;
 }

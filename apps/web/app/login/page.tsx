@@ -9,7 +9,7 @@ import { Field } from '@/components/form';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/api';
+import { api, refreshSession } from '@/lib/api';
 
 type LoginInput = z.input<typeof loginSchema>;
 
@@ -22,7 +22,7 @@ function LoginForm() {
 
   // A still-valid refresh session skips the form.
   useEffect(() => {
-    fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'same-origin' }).then((r) => r.ok && router.replace(destination));
+    refreshSession().then((ok) => ok && router.replace(destination));
   }, [router, destination]);
 
   const onSubmit = handleSubmit(async (values) => {

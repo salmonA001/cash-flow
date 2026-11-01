@@ -45,8 +45,8 @@ export class IntegrationsService {
       provider,
       credential: creds.find((c) => c.provider === provider) ?? null,
       events: Object.fromEntries(events.filter((e) => e.provider === provider).map((e) => [e.status, e._count])),
-      ...(provider === 'SHOPIFY' ? { apiVersion: SHOPIFY_API_VERSION, webhookUrl: `${this.config.APP_URL}/api/v1/webhooks/shopify` } : {}),
-      ...(provider === 'PRINTFUL' ? { webhookUrl: `${this.config.APP_URL}/api/v1/webhooks/printful?token=<PRINTFUL_WEBHOOK_SECRET>` } : {}),
+      ...(provider === 'SHOPIFY' ? { apiVersion: SHOPIFY_API_VERSION, webhookUrl: `${this.config.API_PUBLIC_URL}/api/v1/webhooks/shopify` } : {}),
+      ...(provider === 'PRINTFUL' ? { webhookUrl: `${this.config.API_PUBLIC_URL}/api/v1/webhooks/printful?token=<PRINTFUL_WEBHOOK_SECRET>` } : {}),
       ...(provider === 'AMAZON_MERCH' ? { note: 'Amazon Merch has no supported API for royalties; import CSV reports instead.' } : {}),
     }));
   }
@@ -66,7 +66,7 @@ export class IntegrationsService {
         shop,
         clientId: this.config.SHOPIFY_CLIENT_ID,
         scopes: SHOPIFY_SCOPES,
-        redirectUri: `${this.config.APP_URL}/api/v1/integrations/shopify/callback`,
+        redirectUri: `${this.config.API_PUBLIC_URL}/api/v1/integrations/shopify/callback`,
         state,
       }),
     };
@@ -90,7 +90,7 @@ export class IntegrationsService {
       code: query.code,
     });
     const client = new ShopifyClient({ shop: query.shop, accessToken });
-    const registrations = await client.registerWebhooks(`${this.config.APP_URL}/api/v1/webhooks/shopify`);
+    const registrations = await client.registerWebhooks(`${this.config.API_PUBLIC_URL}/api/v1/webhooks/shopify`);
     const failed = registrations.filter((r) => !r.ok);
 
     await this.prisma.integrationCredential.upsert({

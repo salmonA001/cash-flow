@@ -6,10 +6,14 @@ export class ApiError extends Error {
   }
 }
 
+/** Public API origin, e.g. https://api.example.com (inlined at build; checked in next.config). */
+export const API_URL = process.env.NEXT_PUBLIC_API_URL!;
+
 let refreshing: Promise<boolean> | null = null;
 
-async function refreshSession(): Promise<boolean> {
-  refreshing ??= fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'same-origin' })
+/** Rotates the session using the refresh cookie (scoped to the API's /api/v1/auth path). */
+export async function refreshSession(): Promise<boolean> {
+  refreshing ??= fetch(`${API_URL}/api/v1/auth/refresh`, { method: 'POST', credentials: 'include' })
     .then((r) => r.ok)
     .finally(() => {
       refreshing = null;
@@ -18,13 +22,13 @@ async function refreshSession(): Promise<boolean> {
 }
 
 /**
- * Same-origin API client. On 401 it rotates the session once via the refresh cookie;
- * if that fails the user is sent to /login.
+ * API client. Session cookies live on the API host and are sent cross-origin (same-site) with
+ * credentials. On 401 it rotates the session once; if that fails the user is sent to /login.
  */
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}, retried = false): Promise<T> {
   const { json, headers, ...rest } = init;
-  const res = await fetch(`/api/v1${path}`, {
-    credentials: 'same-origin',
+  const res = await fetch(`${API_URL}/api/v1${path}`, {
+    credentials: 'include',
     ...rest,
     headers: { ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
     body: json !== undefined ? JSON.stringify(json) : rest.body,

@@ -1,13 +1,13 @@
-# App origin: web UI and API share one origin, so auth cookies stay first-party.
-{$APP_DOMAIN} {
+# The web app is hosted on Vercel (app domain). This VPS serves the API and object storage.
+
+# API: called directly by the browser from the app domain (same site → session cookies work).
+{$API_DOMAIN} {
 	encode zstd gzip
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "DENY"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Referrer-Policy "no-referrer"
 		-Server
 	}
 
@@ -22,13 +22,13 @@
 	handle /health {
 		reverse_proxy api:4000
 	}
-	# /metrics is intentionally not routed: Prometheus scrapes it on the internal network.
+	# Everything else — including /metrics, scraped by Prometheus on the internal network — is not exposed.
 	handle {
-		reverse_proxy web:3000
+		respond 404
 	}
 }
 
-# Object storage: S3 API only, for short-lived presigned download URLs.
+# Object storage: S3 API only, for short-lived presigned URLs.
 # The MinIO console (port 9001) is never exposed.
 {$FILES_DOMAIN} {
 	reverse_proxy minio:9000

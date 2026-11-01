@@ -68,6 +68,14 @@ describe('platform', () => {
     await owner.post('/api/v1/collections').set('Origin', 'https://evil.test').send({ name: 'x' }).expect(403);
   });
 
+  it('allows credentialed CORS only from the web app origin', async () => {
+    const ok = await request(app.getHttpServer()).options('/api/v1/designs').set('Origin', ORIGIN).set('Access-Control-Request-Method', 'POST').expect(204);
+    expect(ok.headers['access-control-allow-origin']).toBe(ORIGIN);
+    expect(ok.headers['access-control-allow-credentials']).toBe('true');
+    const evil = await request(app.getHttpServer()).options('/api/v1/designs').set('Origin', 'https://evil.test').set('Access-Control-Request-Method', 'POST');
+    expect(evil.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
   it('rotates refresh tokens and detects reuse', async () => {
     const agent = await login('owner@acme.test');
     await agent.post('/api/v1/auth/refresh').set('Origin', ORIGIN).expect(204);

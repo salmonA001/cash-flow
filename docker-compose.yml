@@ -1,4 +1,4 @@
-# Cash Flow Engine OS — full stack (VPS / production-like).
+# Cash Flow Engine OS — backend stack for the VPS. The web app is hosted on Vercel (see docs/DEPLOYMENT.md).
 # Usage: cp .env.example .env  (fill in secrets)  →  docker compose up -d --build
 # Optional monitoring: docker compose --profile monitoring up -d
 # Image tags are pinned; see docs/DEPLOYMENT.md → "Upgrades" before changing them.
@@ -108,37 +108,19 @@ services:
     depends_on:
       redis: { condition: service_healthy }
 
-  web:
-    image: cfe-web:local
-    build:
-      context: .
-      dockerfile: infrastructure/docker/Dockerfile
-      target: web
-      args:
-        API_INTERNAL_URL: http://api:4000
-    restart: unless-stopped
-    networks: [internal]
-    depends_on:
-      api: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
   caddy:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
-      APP_DOMAIN: ${APP_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
       FILES_DOMAIN: ${FILES_DOMAIN}
     volumes:
       - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     networks: [internal]
-    depends_on: [web, api, minio]
+    depends_on: [api, minio]
 
   prometheus:
     image: prom/prometheus:v3.6.0

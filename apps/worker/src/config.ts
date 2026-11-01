@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 const schema = z.object({
-  APP_URL: z.url(),
+  /** Public URL of the API; download links in emails point here. */
+  API_PUBLIC_URL: z.url(),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
   ENCRYPTION_KEY: z.string().min(1),

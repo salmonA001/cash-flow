@@ -9,6 +9,7 @@ export function applyTestEnv() {
   Object.assign(process.env, {
     NODE_ENV: 'test',
     APP_URL: 'http://localhost:3000',
+    API_PUBLIC_URL: 'http://localhost:4000',
     DATABASE_URL: TEST_DATABASE_URL,
     REDIS_URL: process.env.TEST_REDIS_URL ?? 'redis://localhost:6379/15',
     JWT_SECRET: 'test-jwt-secret-that-is-long-enough-123456',

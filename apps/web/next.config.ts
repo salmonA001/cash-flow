@@ -1,25 +1,28 @@
-import path from 'node:path';
+import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD } from 'next/constants';
 import type { NextConfig } from 'next';
 
-const apiUrl = process.env.API_INTERNAL_URL;
-if (!apiUrl) throw new Error('API_INTERNAL_URL must be set (e.g. http://localhost:4000)');
-
-/**
- * The browser only ever talks to this origin. /api/v1 and /health are proxied to the API,
- * so auth cookies stay first-party (SameSite=Strict). In production Caddy routes these
- * paths directly to the API with the same effect.
- */
 const config: NextConfig = {
-  output: 'standalone',
-  // Trace files from the monorepo root so workspace packages are included in the standalone build.
-  outputFileTracingRoot: path.join(__dirname, '../../'),
   poweredByHeader: false,
-  async rewrites() {
+  async headers() {
     return [
-      { source: '/api/v1/:path*', destination: `${apiUrl}/api/v1/:path*` },
-      { source: '/health', destination: `${apiUrl}/health` },
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+        ],
+      },
     ];
   },
 };
 
-export default config;
+export default function nextConfig(phase: string): NextConfig {
+  // The browser calls the API directly (e.g. https://api.example.com); the URL is inlined at build time.
+  if ((phase === PHASE_PRODUCTION_BUILD || phase === PHASE_DEVELOPMENT_SERVER) && !process.env.NEXT_PUBLIC_API_URL) {
+    throw new Error('NEXT_PUBLIC_API_URL must be set (e.g. https://api.example.com)');
+  }
+  return config;
+}

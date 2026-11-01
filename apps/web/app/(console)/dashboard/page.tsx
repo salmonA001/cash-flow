@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useApi } from '@/hooks/use-api';
+import { API_URL } from '@/lib/api';
 import { formatDateTime, formatMoney, humanize } from '@/lib/format';
 import type { AutomationRun, FinanceSummary, MonthlyPoint, OrderSummary, Paginated } from '@/types/api';
 
@@ -178,7 +179,7 @@ function sumField(s: FinanceSummary, field: keyof FinanceSummary['channels'][num
 /** /health lives outside /api/v1 and answers 503 with the same body when degraded. */
 function useApiHealth() {
   return useSWR<{ status: string; checks: Record<string, string> }>(
-    '/health',
+    `${API_URL}/health`,
     (url: string) => fetch(url, { cache: 'no-store' }).then((r) => r.json()),
     { refreshInterval: 30_000 },
   );

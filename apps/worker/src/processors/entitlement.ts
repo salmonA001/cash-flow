@@ -37,7 +37,7 @@ export async function grantEntitlement(ctx: WorkerContext, orderItemId: string):
         },
       });
 
-  const link = `${ctx.appUrl}/api/v1/downloads/access/${token}`;
+  const link = `${ctx.apiUrl}/api/v1/downloads/access/${token}`;
   await ctx.mailer.send({
     to: email,
     subject: `Your download: ${item.title}`,

@@ -29,7 +29,7 @@ async function main() {
     prisma,
     storage,
     mailer: createSmtpMailer(config.SMTP_URL, config.MAIL_FROM),
-    appUrl: config.APP_URL,
+    apiUrl: config.API_PUBLIC_URL,
     ...providerFactories(prisma, loadEncryptionKey(config.ENCRYPTION_KEY)),
   };
   const connection = new IORedis(config.REDIS_URL, { maxRetriesPerRequest: null });
