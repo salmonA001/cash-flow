@@ -1,0 +1,26 @@
+{
+  "name": "@cfe/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "seed": "node dist/seed.js",
+    "test": "echo 'covered by api/worker integration tests'"
+  },
+  "dependencies": {
+    "@cfe/business-rules": "workspace:*",
+    "@prisma/client": "6.19.3",
+    "argon2": "0.44.0",
+    "prisma": "6.19.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.12",
+    "typescript": "5.9.3"
+  }
+}

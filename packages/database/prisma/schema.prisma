@@ -1,0 +1,966 @@
+// Cash Flow Engine OS — PostgreSQL schema
+// Rules: money is Decimal (never Float); every org-owned row carries organizationId;
+// provider IDs are stored for reconciliation and protected by unique constraints.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum Channel {
+  AMAZON_MERCH
+  SHOPIFY_POD
+  DIGITAL
+}
+
+enum DesignStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ARCHIVED
+}
+
+enum AssetKind {
+  ORIGINAL
+  PRINT_FILE
+  MOCKUP
+  PREVIEW
+}
+
+enum ProductType {
+  POD
+  DIGITAL
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum ListingChannel {
+  AMAZON_MERCH
+  SHOPIFY
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING
+  LIVE
+  REJECTED
+  REMOVED
+}
+
+enum OrderSource {
+  SHOPIFY
+}
+
+enum OrderStatus {
+  OPEN
+  CANCELLED
+  CLOSED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+  VOIDED
+  FAILED
+}
+
+enum OrderItemType {
+  UNCLASSIFIED
+  POD
+  DIGITAL
+  OTHER
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum FulfillmentProviderKey {
+  PRINTFUL
+}
+
+enum FulfillmentStatus {
+  AWAITING_APPROVAL
+  APPROVED
+  SUBMITTING
+  SUBMITTED
+  IN_PRODUCTION
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum EntitlementStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum DownloadOutcome {
+  GRANTED
+  DENIED_EXPIRED
+  DENIED_LIMIT
+  DENIED_REVOKED
+}
+
+enum PayoutSource {
+  AMAZON_MERCH
+  SHOPIFY_PAYMENTS
+  OTHER
+}
+
+enum PayoutStatus {
+  EXPECTED
+  PAID
+  RECONCILED
+  MISMATCH
+}
+
+enum ExpenseCategory {
+  ADVERTISING
+  SOFTWARE
+  SAMPLES
+  CONTRACTOR
+  PLATFORM_FEES
+  OPERATING
+  OTHER
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum AutomationLevel {
+  AUTOMATIC
+  APPROVAL_REQUIRED
+  HUMAN_JUDGMENT
+}
+
+enum AutomationRunStatus {
+  PENDING
+  AWAITING_APPROVAL
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+enum IntegrationProvider {
+  SHOPIFY
+  PRINTFUL
+  AMAZON_MERCH
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+enum IntegrationEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum ReviewTaskStatus {
+  OPEN
+  RESOLVED
+}
+
+// ───────────────────────── Identity & access ─────────────────────────
+
+model Organization {
+  id                          String   @id @default(cuid())
+  name                        String
+  slug                        String   @unique
+  baseCurrency                String   @default("USD") @db.Char(3)
+  /// When true, no live external action (Printful submission, Shopify writes) is executed.
+  demoMode                    Boolean  @default(true)
+  /// Initial rollout safeguard: live fulfillment requires a human approval.
+  fulfillmentRequiresApproval Boolean  @default(true)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  users                  User[]
+  roles                  Role[]
+  designs                Design[]
+  designAssets           DesignAsset[]
+  collections            Collection[]
+  products               Product[]
+  productVariants        ProductVariant[]
+  listings               MarketplaceListing[]
+  customers              Customer[]
+  orders                 Order[]
+  orderItems             OrderItem[]
+  payments               Payment[]
+  refunds                Refund[]
+  fulfillmentOrders      FulfillmentOrder[]
+  fulfillmentEvents      FulfillmentEvent[]
+  digitalProducts        DigitalProduct[]
+  downloadAssets         DownloadAsset[]
+  downloadEntitlements   DownloadEntitlement[]
+  downloadEvents         DownloadEvent[]
+  amazonImports          AmazonReportImport[]
+  royaltyTransactions    RoyaltyTransaction[]
+  payouts                Payout[]
+  expenses               Expense[]
+  automationRules        AutomationRule[]
+  automationRuns         AutomationRun[]
+  integrationEvents      IntegrationEvent[]
+  integrationCredentials IntegrationCredential[]
+  auditLogs              AuditLog[]
+  notifications          Notification[]
+  reviewTasks            ReviewTask[]
+}
+
+model User {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String    @unique
+  name           String
+  passwordHash   String
+  roleId         String
+  isActive       Boolean   @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  role         Role             @relation(fields: [roleId], references: [id])
+  sessions     RefreshSession[]
+
+  @@index([organizationId])
+}
+
+model Role {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  users        User[]
+  permissions  RolePermission[]
+
+  @@unique([organizationId, name])
+}
+
+/// Global permission catalog (e.g. "finance:write"). Seeded, not org-owned.
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  description String
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model RefreshSession {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ip        String?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ───────────────────────────── Designs ─────────────────────────────
+
+model Design {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  description    String?
+  status         DesignStatus @default(DRAFT)
+  category       String?
+  tags           String[]
+  approvedAt     DateTime?
+  approvedById   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  versions     DesignVersion[]
+  collections  DesignCollection[]
+  products     Product[]
+  listings     MarketplaceListing[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, updatedAt])
+}
+
+model DesignVersion {
+  id            String   @id @default(cuid())
+  designId      String
+  versionNumber Int
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  design Design        @relation(fields: [designId], references: [id], onDelete: Cascade)
+  assets DesignAsset[]
+
+  @@unique([designId, versionNumber])
+}
+
+model DesignAsset {
+  id              String    @id @default(cuid())
+  organizationId  String
+  designVersionId String
+  kind            AssetKind
+  bucket          String
+  objectKey       String
+  fileName        String
+  contentType     String
+  sizeBytes       Int
+  checksumSha256  String
+  width           Int?
+  height          Int?
+  createdAt       DateTime  @default(now())
+
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  designVersion DesignVersion @relation(fields: [designVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([bucket, objectKey])
+  @@index([organizationId])
+}
+
+model Collection {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  designs      DesignCollection[]
+
+  @@unique([organizationId, name])
+}
+
+model DesignCollection {
+  designId     String
+  collectionId String
+
+  design     Design     @relation(fields: [designId], references: [id], onDelete: Cascade)
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([designId, collectionId])
+}
+
+// ───────────────────────────── Catalog ─────────────────────────────
+
+model Product {
+  id               String        @id @default(cuid())
+  organizationId   String
+  designId         String?
+  title            String
+  description      String?
+  type             ProductType
+  status           ProductStatus @default(DRAFT)
+  category         String?
+  shopifyProductId String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  design         Design?              @relation(fields: [designId], references: [id], onDelete: Restrict)
+  variants       ProductVariant[]
+  listings       MarketplaceListing[]
+  digitalProduct DigitalProduct?
+
+  @@unique([organizationId, shopifyProductId])
+  @@index([organizationId, type, status])
+  @@index([designId])
+}
+
+model ProductVariant {
+  id                String   @id @default(cuid())
+  organizationId    String
+  productId         String
+  sku               String
+  size              String?
+  color             String?
+  price             Decimal  @db.Decimal(14, 2)
+  currency          String   @db.Char(3)
+  /// Expected unit production cost (informational; actual cost comes from the provider).
+  productionCost    Decimal? @db.Decimal(14, 2)
+  shopifyVariantId  String?
+  /// Printful catalog variant ID used when creating fulfillment orders.
+  printfulVariantId Int?
+  /// Public URL / object key reference of the print file for this variant.
+  printFileAssetId  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems   OrderItem[]
+
+  @@unique([organizationId, sku])
+  @@unique([organizationId, shopifyVariantId])
+  @@index([productId])
+}
+
+model MarketplaceListing {
+  id             String         @id @default(cuid())
+  organizationId String
+  productId      String?
+  designId       String?
+  channel        ListingChannel
+  /// e.g. "amazon.com", "amazon.co.uk", "shopify"
+  marketplace    String
+  country        String?        @db.Char(2)
+  /// ASIN for Amazon Merch, product GID for Shopify.
+  externalId     String
+  url            String?
+  status         ListingStatus  @default(DRAFT)
+  publishedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  product      Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+  design       Design?              @relation(fields: [designId], references: [id], onDelete: SetNull)
+  royalties    RoyaltyTransaction[]
+
+  @@unique([organizationId, channel, marketplace, externalId])
+  @@index([organizationId, channel, status])
+}
+
+// ───────────────────────────── Commerce ─────────────────────────────
+
+model Customer {
+  id                String   @id @default(cuid())
+  organizationId    String
+  email             String?
+  name              String?
+  country           String?  @db.Char(2)
+  shopifyCustomerId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id])
+  orders       Order[]
+  entitlements DownloadEntitlement[]
+
+  @@unique([organizationId, shopifyCustomerId])
+  @@index([organizationId, email])
+}
+
+model Order {
+  id              String        @id @default(cuid())
+  organizationId  String
+  source          OrderSource
+  externalId      String
+  orderNumber     String
+  customerId      String?
+  status          OrderStatus   @default(OPEN)
+  paymentStatus   PaymentStatus @default(PENDING)
+  currency        String        @db.Char(3)
+  subtotal        Decimal       @db.Decimal(14, 2)
+  shippingTotal   Decimal       @db.Decimal(14, 2)
+  taxTotal        Decimal       @db.Decimal(14, 2)
+  discountTotal   Decimal       @db.Decimal(14, 2)
+  total           Decimal       @db.Decimal(14, 2)
+  shippingAddress Json?
+  placedAt        DateTime
+  cancelledAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  customer     Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items        OrderItem[]
+  payments     Payment[]
+  refunds      Refund[]
+  fulfillments FulfillmentOrder[]
+
+  @@unique([organizationId, source, externalId])
+  @@index([organizationId, placedAt])
+  @@index([organizationId, paymentStatus])
+}
+
+model OrderItem {
+  id                 String        @id @default(cuid())
+  organizationId     String
+  orderId            String
+  variantId          String?
+  externalLineItemId String
+  title              String
+  sku                String?
+  quantity           Int
+  unitPrice          Decimal       @db.Decimal(14, 2)
+  totalDiscount      Decimal       @db.Decimal(14, 2)
+  itemType           OrderItemType @default(UNCLASSIFIED)
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  order        Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant      ProductVariant?      @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  entitlement  DownloadEntitlement?
+
+  @@unique([orderId, externalLineItemId])
+  @@index([organizationId, itemType])
+}
+
+model Payment {
+  id             String            @id @default(cuid())
+  organizationId String
+  orderId        String
+  provider       String
+  externalId     String
+  amount         Decimal           @db.Decimal(14, 2)
+  fee            Decimal           @default(0) @db.Decimal(14, 2)
+  currency       String            @db.Char(3)
+  status         TransactionStatus
+  processedAt    DateTime
+  createdAt      DateTime          @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, provider, externalId])
+  @@index([organizationId, processedAt])
+}
+
+model Refund {
+  id             String   @id @default(cuid())
+  organizationId String
+  orderId        String
+  externalId     String
+  amount         Decimal  @db.Decimal(14, 2)
+  currency       String   @db.Char(3)
+  reason         String?
+  processedAt    DateTime
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, processedAt])
+}
+
+// ──────────────────────────── Fulfillment ────────────────────────────
+
+model FulfillmentOrder {
+  id             String                 @id @default(cuid())
+  organizationId String
+  orderId        String
+  provider       FulfillmentProviderKey
+  /// Deterministic key sent to the provider as external_id: prevents duplicate provider orders.
+  idempotencyKey String
+  externalId     String?
+  status         FulfillmentStatus      @default(AWAITING_APPROVAL)
+  currency       String?                @db.Char(3)
+  productionCost Decimal?               @db.Decimal(14, 2)
+  shippingCost   Decimal?               @db.Decimal(14, 2)
+  taxCost        Decimal?               @db.Decimal(14, 2)
+  carrier        String?
+  trackingNumber String?
+  trackingUrl    String?
+  approvedById   String?
+  approvedAt     DateTime?
+  submittedAt    DateTime?
+  attemptCount   Int                    @default(0)
+  lastError      String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  order        Order              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  events       FulfillmentEvent[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([orderId, provider])
+  @@index([organizationId, status])
+}
+
+model FulfillmentEvent {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  fulfillmentOrderId String
+  type               String
+  message            String?
+  payload            Json?
+  createdAt          DateTime @default(now())
+
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  fulfillmentOrder FulfillmentOrder @relation(fields: [fulfillmentOrderId], references: [id], onDelete: Cascade)
+
+  @@index([fulfillmentOrderId, createdAt])
+}
+
+// ───────────────────────── Digital delivery ─────────────────────────
+
+model DigitalProduct {
+  id             String   @id @default(cuid())
+  organizationId String
+  productId      String   @unique
+  maxDownloads   Int      @default(5)
+  accessDays     Int      @default(30)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id])
+  product      Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  assets       DownloadAsset[]
+  entitlements DownloadEntitlement[]
+}
+
+model DownloadAsset {
+  id               String   @id @default(cuid())
+  organizationId   String
+  digitalProductId String
+  version          Int
+  bucket           String
+  objectKey        String
+  fileName         String
+  contentType      String
+  sizeBytes        Int
+  checksumSha256   String
+  isCurrent        Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  digitalProduct DigitalProduct @relation(fields: [digitalProductId], references: [id], onDelete: Cascade)
+
+  @@unique([digitalProductId, version])
+  @@unique([bucket, objectKey])
+}
+
+model DownloadEntitlement {
+  id               String            @id @default(cuid())
+  organizationId   String
+  digitalProductId String
+  orderItemId      String?           @unique
+  customerId       String?
+  email            String
+  /// SHA-256 of the bearer token. The raw token is shown once and never stored.
+  tokenHash        String            @unique
+  maxDownloads     Int
+  downloadCount    Int               @default(0)
+  expiresAt        DateTime
+  status           EntitlementStatus @default(ACTIVE)
+  revokedAt        DateTime?
+  revokedReason    String?
+  createdAt        DateTime          @default(now())
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  digitalProduct DigitalProduct  @relation(fields: [digitalProductId], references: [id], onDelete: Restrict)
+  orderItem      OrderItem?      @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  customer       Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  events         DownloadEvent[]
+
+  @@index([organizationId, status])
+}
+
+model DownloadEvent {
+  id             String          @id @default(cuid())
+  organizationId String
+  entitlementId  String
+  outcome        DownloadOutcome
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime        @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  entitlement  DownloadEntitlement @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+
+  @@index([entitlementId, createdAt])
+}
+
+// ─────────────────────────── Amazon Merch ───────────────────────────
+
+model AmazonReportImport {
+  id             String       @id @default(cuid())
+  organizationId String
+  formatId       String
+  fileName       String
+  bucket         String
+  objectKey      String
+  checksumSha256 String
+  status         ImportStatus @default(PENDING)
+  rowCount       Int          @default(0)
+  importedCount  Int          @default(0)
+  duplicateCount Int          @default(0)
+  errorCount     Int          @default(0)
+  errors         Json?
+  uploadedById   String
+  createdAt      DateTime     @default(now())
+  completedAt    DateTime?
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  royalties    RoyaltyTransaction[]
+
+  /// Re-uploading the exact same file is rejected.
+  @@unique([organizationId, checksumSha256])
+  @@index([organizationId, createdAt])
+}
+
+/// Amazon Merch royalties are stored separately from Shopify order revenue.
+model RoyaltyTransaction {
+  id              String   @id @default(cuid())
+  organizationId  String
+  importId        String
+  listingId       String?
+  marketplace     String
+  asin            String
+  title           String?
+  productType     String?
+  transactionDate DateTime @db.Date
+  unitsSold       Int
+  unitsReturned   Int      @default(0)
+  royaltyAmount   Decimal  @db.Decimal(14, 2)
+  currency        String   @db.Char(3)
+  /// Hash of the normalized row — dedupes identical rows across overlapping reports.
+  rowHash         String
+  createdAt       DateTime @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  import       AmazonReportImport  @relation(fields: [importId], references: [id], onDelete: Restrict)
+  listing      MarketplaceListing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, rowHash])
+  @@index([organizationId, transactionDate])
+  @@index([organizationId, asin])
+}
+
+// ───────────────────────────── Finance ─────────────────────────────
+
+/// Payouts are cash movements of already-recognized revenue. They are never counted as revenue.
+model Payout {
+  id             String       @id @default(cuid())
+  organizationId String
+  source         PayoutSource
+  externalId     String
+  amount         Decimal      @db.Decimal(14, 2)
+  currency       String       @db.Char(3)
+  periodStart    DateTime     @db.Date
+  periodEnd      DateTime     @db.Date
+  paidAt         DateTime?
+  status         PayoutStatus @default(EXPECTED)
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, source, externalId])
+  @@index([organizationId, periodEnd])
+}
+
+model Expense {
+  id             String          @id @default(cuid())
+  organizationId String
+  category       ExpenseCategory
+  description    String
+  vendor         String?
+  amount         Decimal         @db.Decimal(14, 2)
+  currency       String          @db.Char(3)
+  incurredOn     DateTime        @db.Date
+  /// Null = shared operating cost allocated across channels.
+  channel        Channel?
+  createdById    String
+  createdAt      DateTime        @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, incurredOn])
+}
+
+/// Market data (not org-owned): 1 base = rate quote, valid for rateDate.
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  base      String   @db.Char(3)
+  quote     String   @db.Char(3)
+  rate      Decimal  @db.Decimal(18, 8)
+  rateDate  DateTime @db.Date
+  source    String
+  createdAt DateTime @default(now())
+
+  @@unique([base, quote, rateDate])
+}
+
+// ───────────────────────────── Automation ─────────────────────────────
+
+model AutomationRule {
+  id             String          @id @default(cuid())
+  organizationId String
+  key            String
+  name           String
+  trigger        String
+  action         String
+  level          AutomationLevel
+  enabled        Boolean         @default(true)
+  config         Json            @default("{}")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  runs         AutomationRun[]
+
+  @@unique([organizationId, key])
+}
+
+model AutomationRun {
+  id             String              @id @default(cuid())
+  organizationId String
+  ruleId         String?
+  trigger        String
+  action         String
+  level          AutomationLevel
+  status         AutomationRunStatus @default(PENDING)
+  subjectType    String?
+  subjectId      String?
+  input          Json?
+  output         Json?
+  error          String?
+  attempts       Int                 @default(0)
+  approvedById   String?
+  approvedAt     DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime            @default(now())
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  rule         AutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+}
+
+// ──────────────────────────── Integrations ────────────────────────────
+
+model IntegrationCredential {
+  id              String              @id @default(cuid())
+  organizationId  String
+  provider        IntegrationProvider
+  /// Shopify shop domain or Printful store ID — maps inbound webhooks to an org.
+  accountRef      String
+  /// AES-256-GCM encrypted access token.
+  encryptedSecret String
+  scopes          String?
+  status          IntegrationStatus   @default(CONNECTED)
+  connectedAt     DateTime            @default(now())
+  lastCheckedAt   DateTime?
+  lastError       String?
+  updatedAt       DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, provider])
+  @@unique([provider, accountRef])
+}
+
+model IntegrationEvent {
+  id             String                 @id @default(cuid())
+  organizationId String
+  provider       IntegrationProvider
+  /// Provider's delivery/event ID — dedupes webhook redeliveries.
+  eventId        String
+  topic          String
+  payload        Json
+  status         IntegrationEventStatus @default(RECEIVED)
+  error          String?
+  attempts       Int                    @default(0)
+  receivedAt     DateTime               @default(now())
+  processedAt    DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, provider, eventId])
+  @@index([organizationId, status])
+}
+
+// ───────────────────────── Audit & notifications ─────────────────────────
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorUserId    String?
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entityType, entityId])
+}
+
+model Notification {
+  id             String               @id @default(cuid())
+  organizationId String
+  severity       NotificationSeverity
+  title          String
+  body           String
+  link           String?
+  readAt         DateTime?
+  createdAt      DateTime             @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, readAt])
+}
+
+model ReviewTask {
+  id             String           @id @default(cuid())
+  organizationId String
+  kind           String
+  subjectType    String
+  subjectId      String
+  summary        String
+  details        Json?
+  status         ReviewTaskStatus @default(OPEN)
+  resolvedById   String?
+  resolvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+}
