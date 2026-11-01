@@ -1,0 +1,35 @@
+# App origin: web UI and API share one origin, so auth cookies stay first-party.
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# 600 MB covers the largest digital product upload (500 MB) plus multipart overhead.
+	request_body {
+		max_size 600MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /health {
+		reverse_proxy api:4000
+	}
+	# /metrics is intentionally not routed: Prometheus scrapes it on the internal network.
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+# Object storage: S3 API only, for short-lived presigned download URLs.
+# The MinIO console (port 9001) is never exposed.
+{$FILES_DOMAIN} {
+	reverse_proxy minio:9000
+}

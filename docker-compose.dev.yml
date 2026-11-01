@@ -1,0 +1,31 @@
+# Local development dependencies only. Run the apps with pnpm on the host.
+# Usage: docker compose -f docker-compose.dev.yml up -d
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment: { POSTGRES_USER: cfe, POSTGRES_PASSWORD: cfe, POSTGRES_DB: cfe }
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [dev-postgres:/var/lib/postgresql/data, ./infrastructure/postgres/dev-init.sql:/docker-entrypoint-initdb.d/dev-init.sql:ro]
+  redis:
+    image: redis:7.4.6-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports: ["127.0.0.1:6379:6379"]
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment: { MINIO_ROOT_USER: cfe-admin, MINIO_ROOT_PASSWORD: cfe-admin-dev-password }
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    volumes: [dev-minio:/data]
+    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 5s, retries: 20 }
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on: { minio: { condition: service_healthy } }
+    entrypoint: ["/bin/sh", "/init.sh"]
+    volumes: ["./infrastructure/minio/init.sh:/init.sh:ro"]
+    environment: { MINIO_ROOT_USER: cfe-admin, MINIO_ROOT_PASSWORD: cfe-admin-dev-password, MINIO_ACCESS_KEY: cfe-app, MINIO_SECRET_KEY: cfe-app-dev-password }
+  mailpit:
+    image: axllent/mailpit:v1.27.10
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+volumes:
+  dev-postgres:
+  dev-minio:

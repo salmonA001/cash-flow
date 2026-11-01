@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/test-results
+**/playwright-report
+**/.auth
+.git
+.env
+.env.*
+!.env.example
+backups
