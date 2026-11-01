@@ -10,6 +10,8 @@ A self-hosted operating system for a print-on-demand and digital-commerce busine
 
 Built as a **modular monolith**: Next.js web app → NestJS REST API → business modules → provider adapters, with BullMQ workers for everything that touches the outside world.
 
+**Hosting:** the web app runs on **Vercel**; the API, worker, PostgreSQL, Redis and MinIO run on your **VPS** with Docker Compose. The two must share a registered domain (e.g. `app.example.com` on Vercel, `api.example.com` on the VPS).
+
 ## Status: Stage 1 (foundation) — complete and tested
 
 | Area | State |
@@ -25,11 +27,12 @@ Built as a **modular monolith**: Next.js web app → NestJS REST API → busines
 | Amazon Merch CSV preview/import, royalty mapping, payout reconciliation | ✅ |
 | Automation engine (12 built-in automations, custom rules, execution log, safe retry) | ✅ |
 | Web UI for all 14 sections, light/dark, responsive | ✅ Playwright-tested |
-| Docker Compose (Postgres, Redis, MinIO, API, worker, scheduler, web, Caddy, monitoring) | ✅ config-validated |
+| Vercel config for the web app (`apps/web/vercel.json`) | ✅ install/build commands verified on a clean checkout |
+| Docker Compose for the VPS (Postgres, Redis, MinIO, API, worker, scheduler, Caddy, monitoring) | ✅ config-validated |
 
-**Test suite:** 30 business-rule unit tests · 12 integration-SDK tests · 27 API end-to-end tests (real Postgres + Redis) · 12 worker integration tests · 11 Playwright browser tests (desktop + mobile).
+**Test suite:** 30 business-rule unit tests · 12 integration-SDK tests · 28 API end-to-end tests (real Postgres + Redis) · 12 worker integration tests · 11 Playwright browser tests (desktop + mobile).
 
-**Not yet verified against live services:** Shopify, Printful and SMTP are exercised through test doubles; MinIO through an in-memory double; the Docker images have not been built in CI. Do a staging run with real sandbox credentials before turning off demo mode. See [Next stages](#next-stages).
+**Not yet verified against live services:** Shopify, Printful and SMTP are exercised through test doubles; MinIO through an in-memory double; the Docker images have not been built in CI, and no Vercel deployment has been made yet. Do a staging run with real sandbox credentials before turning off demo mode. See [Next stages](#next-stages).
 
 ## Quick start (local development)
 
@@ -44,7 +47,8 @@ cp .env.example .env
 #   REDIS_URL=redis://localhost:6379/0
 #   MINIO_ENDPOINT=http://localhost:9000  MINIO_PUBLIC_ENDPOINT=http://localhost:9000
 #   MINIO_ACCESS_KEY=cfe-app  MINIO_SECRET_KEY=cfe-app-dev-password
-#   SMTP_URL=smtp://localhost:1025  API_INTERNAL_URL=http://localhost:4000
+#   SMTP_URL=smtp://localhost:1025
+#   APP_URL=http://localhost:3000  API_PUBLIC_URL=http://localhost:4000  NEXT_PUBLIC_API_URL=http://localhost:4000
 #   JWT_SECRET / ENCRYPTION_KEY: openssl rand -base64 32
 docker compose -f docker-compose.dev.yml up -d   # Postgres, Redis, MinIO, Mailpit
 pnpm install
@@ -88,13 +92,16 @@ The API and worker suites recreate their own `*_test` databases and refuse to to
 
 ## Production
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): `cp .env.example .env`, fill secrets, point DNS, `docker compose up -d --build`. Caddy obtains HTTPS certificates automatically.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md):
+
+1. **VPS** — `cp .env.example .env`, fill secrets, point `api.` and `files.` DNS at the VPS, `docker compose up -d --build`. Caddy obtains HTTPS certificates automatically.
+2. **Vercel** — import the repository, set **Root Directory** to `apps/web`, add `NEXT_PUBLIC_API_URL=https://api.example.com`, and attach the custom domain `app.example.com`.
 
 ## Repository layout
 
 ```
 apps/
-  web/        Next.js 15 app router UI (Tailwind 4, shadcn-style components, Recharts, RHF + Zod)
+  web/        Next.js 15 app router UI (Tailwind 4, shadcn-style components, Recharts, RHF + Zod) — deployed to Vercel
   api/        NestJS 11 REST API (/api/v1) — controllers, services, guards
   worker/     BullMQ processors, automation engine, scheduler
 packages/
@@ -103,7 +110,7 @@ packages/
   integration-sdk/ Shopify, Printful, MinIO storage, file validation, credential encryption
   validation/      Zod schemas shared by API and web
   shared-types/    Queue names, job payloads, API response types
-infrastructure/    Dockerfile, Caddyfile, MinIO init, Postgres backup/restore, Prometheus/Grafana
+infrastructure/    Backend Dockerfile, Caddyfile, MinIO init, Postgres backup/restore, Prometheus/Grafana
 docs/              Architecture, database, API, integrations, security, deployment
 ```
 

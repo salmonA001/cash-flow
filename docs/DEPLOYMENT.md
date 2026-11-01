@@ -1,13 +1,22 @@
 # Deployment
 
-## VPS requirements
+The system runs in two places:
+
+| Where | What | Domain (example) |
+| --- | --- | --- |
+| **Vercel** | Next.js web app (`apps/web`) | `app.example.com` |
+| **VPS** (Docker Compose) | API, worker, scheduler, PostgreSQL, Redis, MinIO, Caddy | `api.example.com`, `files.example.com` |
+
+**The web and API domains must be subdomains of the same registered domain.** Session cookies are `SameSite=Strict` and live on the API host; the browser only sends them when the page and the API are the same site. Vercel's `*.vercel.app` preview URLs are a different site, so you can't sign in on previews. Use the custom domain.
+
+## 1. VPS (backend)
+
+Requirements:
 
 - Ubuntu 24.04 LTS (or any Linux with Docker Engine 27+ and the Compose plugin)
 - 2 vCPU / 4 GB RAM minimum; disk sized for design files and digital products (MinIO data)
-- DNS: `A` records for `APP_DOMAIN` (e.g. `app.example.com`) and `FILES_DOMAIN` (e.g. `files.example.com`) → the VPS
+- DNS: `A` records for `API_DOMAIN` (`api.example.com`) and `FILES_DOMAIN` (`files.example.com`) → the VPS
 - Firewall: allow 22, 80, 443 only
-
-## First deployment
 
 ```bash
 sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 git
@@ -20,7 +29,8 @@ Set at least:
 
 | Variable | Value |
 | --- | --- |
-| `APP_DOMAIN`, `APP_URL` | `app.example.com`, `https://app.example.com` |
+| `APP_URL` | `https://app.example.com` (the Vercel domain — only origin allowed by CORS) |
+| `API_DOMAIN`, `API_PUBLIC_URL` | `api.example.com`, `https://api.example.com` |
 | `FILES_DOMAIN`, `MINIO_PUBLIC_ENDPOINT` | `files.example.com`, `https://files.example.com` |
 | `COOKIE_SECURE` | `true` |
 | `POSTGRES_PASSWORD` + the same in `DATABASE_URL` | `openssl rand -hex 24` |
@@ -34,14 +44,35 @@ Set at least:
 
 ```bash
 docker compose up -d --build
-docker compose ps            # all services healthy; migrate/minio-init/scheduler "exited (0)"
-docker compose logs -f api worker
+docker compose ps            # all healthy; migrate / minio-init / scheduler "exited (0)"
+curl https://api.example.com/health
 ```
 
-Caddy obtains and renews Let's Encrypt certificates automatically once DNS resolves. Open `https://app.example.com`, sign in, then:
+Caddy obtains and renews Let's Encrypt certificates automatically once DNS resolves.
+
+## 2. Vercel (web app)
+
+1. **Add New → Project** in Vercel and import this GitHub repository.
+2. **Root Directory**: `apps/web`. Leave the framework preset (Next.js) and the build and install commands alone: they come from `apps/web/vercel.json`, which installs and builds only the web app and the two shared packages it uses (`@cfe/validation`, `@cfe/shared-types`) with pinned pnpm 10.
+3. **Environment Variables** (Production, and Preview if you use it):
+
+   | Name | Value |
+   | --- | --- |
+   | `NEXT_PUBLIC_API_URL` | `https://api.example.com` |
+
+   It is inlined at build time. The build fails if it's missing, and changing it requires a redeploy.
+4. **Node.js version**: 22.x (also pinned via `engines` in `apps/web/package.json`).
+5. Deploy, then **Settings → Domains**: add `app.example.com` and create the DNS record Vercel shows (usually a `CNAME` to `cname.vercel-dns.com`).
+6. Make sure `APP_URL` in the VPS `.env` is exactly `https://app.example.com`, and run `docker compose up -d` if you changed it.
+
+Every push to the production branch redeploys the web app. Backend changes are deployed on the VPS (see Upgrades). Optionally, set **Ignored Build Step** in Vercel so pushes that only touch `apps/api`, `apps/worker` or `infrastructure` don't rebuild the web app.
+
+## 3. First sign-in
+
+Open `https://app.example.com`, sign in with the seed owner, then:
 
 1. Settings → Organization: base currency.
-2. Settings → Integrations: connect Shopify and Printful; configure the Printful webhook URL shown there.
+2. Settings → Integrations: connect Shopify and Printful; configure the Printful webhook URL shown there (it points at the API domain).
 3. Products: map each variant to its Printful variant ID and print file, and its Shopify variant ID.
 4. Run a test order on Shopify while **demo mode** is on; confirm it appears classified with a fulfillment task. Then turn demo mode off and approve one real order.
 
@@ -81,11 +112,15 @@ Restore MinIO with `mc mirror offsite/cfe-backup local`. Test a restore on a sep
 
 ## Upgrades
 
+Backend (VPS):
+
 ```bash
 git pull
 docker compose build
 docker compose up -d          # runs pending migrations first
 ```
+
+Web (Vercel): redeploys automatically on push. Deploy the backend first when an API change and a UI change depend on each other.
 
 - **Dependencies** are pinned exactly (`.npmrc save-exact`, `pnpm-lock.yaml`). To upgrade: `pnpm up --latest <pkg>` in the relevant package, read its changelog, run `pnpm build && pnpm test && pnpm test:e2e`, commit the lockfile.
 - **Images** are pinned by tag in `docker-compose.yml`. Upgrade one at a time; take a backup before upgrading Postgres across major versions (requires dump/restore).
@@ -109,5 +144,7 @@ Ports bind to `127.0.0.1` only. The dev Postgres also creates the `cfe_test` and
 | Finance shows "Missing exchange rates" | Add the listed pairs in Finance → Exchange rates. |
 | Orders not arriving | Settings → Integrations event counts; `docker compose logs worker`; Shopify app → Webhooks delivery log. The hourly reconciliation also back-fills. |
 | Fulfillment stuck in `NEEDS_REVIEW` | Check the order in the Printful dashboard, then **Retry** (looks the order up before creating). |
-| Login always 401 behind a proxy | `COOKIE_SECURE=true` requires HTTPS end to end; `APP_URL` must match the browser origin exactly. |
+| Login always 401 / bounces back to /login | Web and API must share a registered domain (not `*.vercel.app`); `COOKIE_SECURE=true` requires HTTPS; `APP_URL` must exactly match the browser origin. |
+| Browser console: CORS error | `APP_URL` on the VPS must equal the web origin exactly (scheme + host, no trailing slash); restart `api` after changing it. |
+| Vercel build: "NEXT_PUBLIC_API_URL must be set" | Add it in Vercel → Settings → Environment Variables and redeploy. |
 | Jobs not running | `docker compose logs worker`; Redis must use `noeviction` (set in compose). |

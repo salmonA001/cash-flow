@@ -7,7 +7,7 @@ All provider code lives in `packages/integration-sdk`. Credentials are stored pe
 **Setup**
 
 1. In the Shopify Partner dashboard (or the store's *Develop apps*), create an app.
-2. App URL: `https://<APP_DOMAIN>`. Allowed redirection URL: `https://<APP_DOMAIN>/api/v1/integrations/shopify/callback`.
+2. App URL: your web app (`APP_URL`, e.g. `https://app.example.com`). Allowed redirection URL: `https://<API_DOMAIN>/api/v1/integrations/shopify/callback` (the API, not the Vercel app).
 3. Put the client ID / secret in `.env` (`SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`).
 4. In the app: **Settings → Integrations → Shopify**, enter `your-store.myshopify.com`, approve the scopes.
 
@@ -34,7 +34,7 @@ The version is pinned in `packages/integration-sdk/src/shopify/version.ts` (`SHO
 
 **Setup**: create a private token in Printful (Developer portal) with order permissions and note the store ID. **Settings → Integrations → Printful**: paste token + store ID. The token is validated with a read-only catalog request before it's stored.
 
-**Webhooks**: Printful API v1 webhooks are not signed, so the webhook URL carries a shared secret: configure `https://<APP_DOMAIN>/api/v1/webhooks/printful?token=<PRINTFUL_WEBHOOK_SECRET>` for `package_shipped`, `order_failed`, `order_canceled`, `order_updated`, `order_put_hold`. The token is compared in constant time, and the order status is always **re-fetched from the Printful API** — webhook content is only used to find the order. If you migrate to Printful API v2 webhooks (signed), replace the token check in `apps/api/src/webhooks/webhooks.service.ts` with signature verification.
+**Webhooks**: Printful API v1 webhooks are not signed, so the webhook URL carries a shared secret: configure `https://<API_DOMAIN>/api/v1/webhooks/printful?token=<PRINTFUL_WEBHOOK_SECRET>` for `package_shipped`, `order_failed`, `order_canceled`, `order_updated`, `order_put_hold`. The token is compared in constant time, and the order status is always **re-fetched from the Printful API** — webhook content is only used to find the order. If you migrate to Printful API v2 webhooks (signed), replace the token check in `apps/api/src/webhooks/webhooks.service.ts` with signature verification.
 
 **Submission safeguards** (`apps/worker/src/processors/fulfillment-submit.ts`):
 

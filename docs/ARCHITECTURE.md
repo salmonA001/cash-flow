@@ -3,15 +3,16 @@
 ## Components
 
 ```
-                        ┌──────────────── Caddy (HTTPS, :443) ────────────────┐
- Browser ──────────────►│  app domain:  /api/*, /health → api   · else → web  │
-                        │  files domain: → minio:9000 (S3 API, presigned GET) │
-                        └───────┬───────────────────────┬─────────────────────┘
-                                │                       │
-                         ┌──────▼──────┐         ┌──────▼──────┐
-                         │  web        │         │  api        │  NestJS, /api/v1
-                         │  Next.js    │         │  REST + auth│
-                         └─────────────┘         └──┬───┬───┬──┘
+              app.example.com (Vercel)            api.example.com / files.example.com (VPS)
+              ┌─────────────────┐                 ┌──────────── Caddy (HTTPS) ────────────┐
+ Browser ────►│  web (Next.js)  │   UI assets     │ api.   /api/*, /health → api          │
+    │         └─────────────────┘                 │ files. → minio:9000 (presigned GET)   │
+    │   fetch + cookies (same-site, CORS)         └──────────┬────────────────────────────┘
+    └──────────────────────────────────────────────────────►│
+                                                  ┌──────▼──────┐
+                                                  │  api        │  NestJS, /api/v1
+                                                  │  REST + auth│
+                                                  └──┬───┬───┬──┘
                                                     │   │   │ enqueue
               Shopify / Printful webhooks ─────────►│   │   ▼
                                                     │   │ ┌───────┐   ┌──────────────┐
@@ -27,7 +28,7 @@
 
 | Component | Responsibility |
 | --- | --- |
-| `apps/web` | UI only. Talks to the API on the same origin (Caddy in production, Next rewrites in dev). |
+| `apps/web` | UI only, hosted on Vercel. Calls the API directly at `NEXT_PUBLIC_API_URL` with credentials. Web and API are same-site subdomains, so `SameSite=Strict` session cookies (set on the API host) are sent; CORS allows only `APP_URL`. |
 | `apps/api` | HTTP: authentication, authorization, validation, reads, and state changes that need no external call. Anything that calls a provider is **enqueued**. |
 | `apps/worker` | All external side effects and ingestion: Shopify order sync, Printful submission/sync, entitlement grants + email, Amazon imports, reconciliation. |
 | `apps/worker` scheduler | Registers repeatable maintenance jobs, then exits. |
@@ -89,6 +90,7 @@ Every automation writes an `AutomationRun` (status, input, output, error). Core 
 
 ## Key decisions
 
+- **Web on Vercel, backend on the VPS** — Vercel serves the UI; long-running workers, Redis queues, Postgres and MinIO need a persistent host. The browser calls the API directly rather than through a Vercel rewrite: uploads up to 500 MB exceed Vercel's proxied request-body limit, and proxying would hide client IPs from the rate limiter.
 - **Modular monolith** — one deployable per role, shared packages instead of network boundaries.
 - **Provider payloads are references, not truth** — the worker always re-reads provider state.
 - **Idempotency at the database** — unique constraints on provider IDs and row hashes, compare-and-set state transitions.
