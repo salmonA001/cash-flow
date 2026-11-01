@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f6f4f1;
+  --foreground: #1c1917;
+  --card: rgb(255 255 255 / 0.82);
+  --card-solid: #ffffff;
+  --muted: #efebe6;
+  --muted-foreground: #6b625a;
+  --border: rgb(28 25 23 / 0.09);
+  --input: rgb(28 25 23 / 0.14);
+  --primary: #c2410c;
+  --primary-foreground: #ffffff;
+  --accent: #fff1e6;
+  --ring: #ea580c;
+  --destructive: #b91c1c;
+  --success: #047857;
+  --warning: #b45309;
+  --chart-1: #ea580c;
+  --chart-2: #0d9488;
+  --chart-3: #7c3aed;
+  --chart-4: #64748b;
+  --glow: radial-gradient(1200px 600px at 85% -10%, rgb(251 146 60 / 0.14), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgb(13 148 136 / 0.08), transparent 60%);
+}
+
+.dark {
+  --background: #0f0d0c;
+  --foreground: #f5f2ee;
+  --card: rgb(28 25 23 / 0.72);
+  --card-solid: #1c1917;
+  --muted: #292524;
+  --muted-foreground: #a8a097;
+  --border: rgb(255 255 255 / 0.08);
+  --input: rgb(255 255 255 / 0.14);
+  --primary: #fb923c;
+  --primary-foreground: #1c1917;
+  --accent: rgb(251 146 60 / 0.12);
+  --ring: #fb923c;
+  --destructive: #f87171;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --chart-1: #fb923c;
+  --chart-2: #2dd4bf;
+  --chart-3: #a78bfa;
+  --chart-4: #94a3b8;
+  --glow: radial-gradient(1200px 600px at 85% -10%, rgb(251 146 60 / 0.10), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgb(45 212 191 / 0.06), transparent 60%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-solid: var(--card-solid);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image: var(--glow);
+    background-attachment: fixed;
+    font-feature-settings: "cv11", "ss01";
+  }
+  :focus-visible { @apply outline-2 outline-offset-2 outline-ring; }
+}
+
+/* Restrained frosted surface: translucency + blur only on cards, never on text-heavy overlays. */
+@utility surface {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.08);
+}
+
+@utility tabular { font-variant-numeric: tabular-nums; }
