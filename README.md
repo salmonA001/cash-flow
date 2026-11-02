@@ -10,7 +10,7 @@ A self-hosted operating system for a print-on-demand and digital-commerce busine
 
 Built as a **modular monolith**: Next.js web app → NestJS REST API → business modules → provider adapters, with BullMQ workers for everything that touches the outside world.
 
-**Run it on your computer** with one command (below). **For real store traffic**, the web app runs on **Vercel** and the API, worker, PostgreSQL, Redis and MinIO run on your **VPS** with Docker Compose. The two must share a registered domain (e.g. `app.example.com` on Vercel, `api.example.com` on the VPS). Both can run on free plans (Vercel Hobby + Oracle Cloud Always Free); only the domain costs money. See [docs/DEPLOYMENT.md → Free hosting](docs/DEPLOYMENT.md#free-hosting).
+**Run it on your computer** with one command (below). **For real store traffic**, the whole system runs on one server with Docker Compose. It can be completely free: an Oracle Cloud Always Free server, a free `sslip.io` address (no domain to buy) and Gmail for email. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Status: Stage 1 (foundation) — complete and tested
 
@@ -27,14 +27,14 @@ Built as a **modular monolith**: Next.js web app → NestJS REST API → busines
 | Amazon Merch CSV preview/import, royalty mapping, payout reconciliation | ✅ |
 | Automation engine (12 built-in automations, custom rules, execution log, safe retry) | ✅ |
 | Web UI for all 14 sections, light/dark, responsive | ✅ Playwright-tested |
-| Vercel deployment via GitHub Actions (`.github/workflows/deploy-web.yml`) | ✅ `vercel build` verified on a clean checkout; first live run needs your `VERCEL_TOKEN` |
+| One-server production setup (`infrastructure/setup-server.sh`, web + API on one origin behind Caddy) | ✅ sign-in, saving and session refresh verified through the production Caddyfile; first run on a real server pending |
 | One-command local stack (`docker-compose.local.yml`) | ✅ built and run end to end: browser suite, real MinIO uploads + presigned downloads, worker email delivery, download limits, Amazon import, restart persistence |
 | MinIO image built from official source (Docker Hub images were withdrawn) | ✅ |
-| Docker Compose for the VPS (Postgres, Redis, MinIO, API, worker, scheduler, Caddy, monitoring) | ✅ config-validated (same images as the local stack) |
+| Docker Compose for the server (Postgres, Redis, MinIO, web, API, worker, scheduler, Caddy, monitoring) | ✅ config-validated (same images as the local stack) |
 
 **Test suite:** 30 business-rule unit tests · 12 integration-SDK tests · 28 API end-to-end tests (real Postgres + Redis) · 12 worker integration tests · 11 Playwright browser tests (desktop + mobile).
 
-**Not yet verified against live services:** Shopify and Printful are exercised through test doubles, and no Vercel deployment has been made yet. Do a staging run with real sandbox credentials before turning off demo mode. See [Next stages](#next-stages).
+**Not yet verified against live services:** Shopify and Printful are exercised through test doubles, and no production server has been set up yet. Do a staging run with real sandbox credentials before turning off demo mode. See [Next stages](#next-stages).
 
 ## Run it on your computer (one command)
 
@@ -56,7 +56,7 @@ The first build takes a few minutes (it compiles MinIO from source). Then open:
 
 Stop with `Ctrl+C` (or `docker compose -f docker-compose.local.yml down`). Your data is kept in Docker volumes; add `-v` to `down` to erase it.
 
-This is for your own computer only: its passwords are public, every port listens on `127.0.0.1` only, and the organization starts in demo mode. Shopify and Printful can't send webhooks to `localhost`, so live store orders need the VPS + Vercel setup in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+This is for your own computer only: its passwords are public, every port listens on `127.0.0.1` only, and the organization starts in demo mode. Shopify and Printful can't send webhooks to `localhost`, so live store orders need the server setup in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Development (hot reload)
 
@@ -88,16 +88,13 @@ The API and worker suites recreate their own `*_test` databases and refuse to to
 
 ## Production
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md):
-
-1. **VPS** — `cp .env.example .env`, fill secrets, point `api.` and `files.` DNS at the VPS, `docker compose up -d --build`. Caddy obtains HTTPS certificates automatically.
-2. **Vercel (via GitHub Actions)** — add the repository secret `VERCEL_TOKEN` and the variable `NEXT_PUBLIC_API_URL=https://api.example.com`, then run *Actions → Deploy web to Vercel*. Every later push to the default branch redeploys. Attach the custom domain `app.example.com` in Vercel.
+Create a free Oracle Cloud server and paste the setup script as its cloud-init script; it installs Docker, writes `.env` with fresh secrets and starts everything at `https://<ip-with-dashes>.sslip.io` with automatic HTTPS. Step by step: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Repository layout
 
 ```
 apps/
-  web/        Next.js 15 app router UI (Tailwind 4, shadcn-style components, Recharts, RHF + Zod) — deployed to Vercel
+  web/        Next.js 15 app router UI (Tailwind 4, shadcn-style components, Recharts, RHF + Zod)
   api/        NestJS 11 REST API (/api/v1) — controllers, services, guards
   worker/     BullMQ processors, automation engine, scheduler
 packages/
@@ -117,7 +114,7 @@ docs/              Architecture, database, API, integrations, security, deployme
 - [API](docs/API.md) — conventions and endpoint reference
 - [Integrations](docs/INTEGRATIONS.md) — Shopify, Printful, Amazon Merch, email; API-version upgrades
 - [Security](docs/SECURITY.md) — threat model and controls
-- [Deployment](docs/DEPLOYMENT.md) — VPS, HTTPS, backups, restore, upgrades, troubleshooting
+- [Deployment](docs/DEPLOYMENT.md) — free server setup, HTTPS, backups, restore, upgrades, troubleshooting
 
 ## Next stages
 

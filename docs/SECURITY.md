@@ -16,9 +16,9 @@
 ## Request protection
 
 - CSRF: `SameSite=Strict` cookies **and** an Origin check on every state-changing request.
-- CORS: credentialed requests are allowed from exactly one origin, `APP_URL` (the Vercel-hosted web app). Other origins get no CORS headers. Session cookies are host-only on the API domain; the web and API hosts must share a registered domain, so `*.vercel.app` preview deployments cannot sign in by design.
+- CORS: credentialed requests are allowed from exactly one origin, `APP_URL`. In production Caddy serves the web app and the API on that one origin, so session cookies are host-only and first-party; CORS only matters for local development (web on :3000, API on :4000).
 - Rate limiting: global, plus tight limits on login and download links.
-- Security headers: `helmet` on the API (cross-origin resource policy `same-site`), HSTS and `nosniff` at Caddy for the API domain, and HSTS / `nosniff` / `DENY` framing / referrer and permissions policies from `next.config.ts` for the web app on Vercel.
+- Security headers: `helmet` on the API (cross-origin resource policy `same-site`), HSTS and `nosniff` at Caddy, and HSTS / `nosniff` / `DENY` framing / referrer and permissions policies from `next.config.ts` for the web app.
 - Strict input validation with Zod; Prisma parameterizes all SQL (raw analytics queries use tagged templates).
 - Errors never include stack traces or internals; 5xx details are logged server-side only.
 

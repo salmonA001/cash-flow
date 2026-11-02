@@ -1,6 +1,6 @@
 # API reference
 
-Base URL: `https://<API_DOMAIN>/api/v1` (plus `/health`; `/metrics` is internal only). The web app calls it cross-origin with `credentials: 'include'`; CORS allows only `APP_URL`.
+Base URL: `https://<APP_DOMAIN>/api/v1` (plus `/health`; `/metrics` is internal only). In production the web app calls it on its own origin; CORS allows only `APP_URL` (cross-origin calls happen only in local development).
 
 ## Conventions
 

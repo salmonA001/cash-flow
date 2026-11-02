@@ -20,9 +20,9 @@ const config: NextConfig = {
 };
 
 export default function nextConfig(phase: string): NextConfig {
-  // The browser calls the API directly (e.g. https://api.example.com); the URL is inlined at build time.
+  // The API origin the browser calls (in production the app's own origin); inlined at build time.
   if ((phase === PHASE_PRODUCTION_BUILD || phase === PHASE_DEVELOPMENT_SERVER) && !process.env.NEXT_PUBLIC_API_URL) {
-    throw new Error('NEXT_PUBLIC_API_URL must be set (e.g. https://api.example.com)');
+    throw new Error('NEXT_PUBLIC_API_URL must be set (e.g. https://app.example.com)');
   }
   return config;
 }

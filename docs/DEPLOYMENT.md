@@ -1,119 +1,66 @@
 # Deployment
 
-The system runs in two places:
+The whole system runs on one Linux server with Docker Compose. Caddy terminates HTTPS and routes:
 
-| Where | What | Domain (example) |
-| --- | --- | --- |
-| **Vercel** | Next.js web app (`apps/web`) | `app.example.com` |
-| **VPS** (Docker Compose) | API, worker, scheduler, PostgreSQL, Redis, MinIO, Caddy | `api.example.com`, `files.example.com` |
+| Address | Serves |
+| --- | --- |
+| `APP_DOMAIN` | the web app, and the API under `/api/*` and `/health` |
+| `FILES_DOMAIN` (`files.` + `APP_DOMAIN`) | presigned file downloads (MinIO S3 API) |
 
-**The web and API domains must be subdomains of the same registered domain.** Session cookies are `SameSite=Strict` and live on the API host; the browser only sends them when the page and the API are the same site. Vercel's `*.vercel.app` preview URLs are a different site, so you can't sign in on previews. Use the custom domain.
+The web app and the API share one origin, so the `SameSite=Strict` session cookies are first-party and uploads (up to 500 MB) go straight to the API.
 
-## Free hosting
+## 1. Free server (Oracle Cloud Always Free)
 
-Everything except the domain can run on free plans:
+This costs nothing and needs no domain. The setup script gives the server the free address `https://<public-ip-with-dashes>.sslip.io` ([sslip.io](https://sslip.io) answers DNS for any name that contains an IP address), and Caddy obtains its HTTPS certificates.
 
 | Part | Free plan | Limit to know |
 | --- | --- | --- |
-| Web app | Vercel **Hobby** | Non-commercial use only; move to Pro once the store sells. |
-| VPS | Oracle Cloud **Always Free** Ampere A1 (ARM) | Up to 4 OCPU / 24 GB RAM / 200 GB disk. Sign-up verifies a card without charging it. Free capacity can be out of stock in a region; retry later or pick another home region at sign-up. |
-| Email | **Brevo** free SMTP | 300 emails/day. |
-| Domain | none | Buy one (any registrar); it is the only cost. |
+| Server | Oracle Cloud **Always Free** Ampere A1 (ARM) | 2 OCPU / 12 GB RAM / 200 GB disk in total. Sign-up checks a card; Always Free resources are never charged. Free capacity can be out of stock in a region; retry later. Oracle may reclaim an instance that stays idle for 7 days (CPU, network and memory all under 20%), so watch the account's email. |
+| Email | **Gmail** SMTP with an app password | About 500 emails a day. |
+| Address | **sslip.io** | Free. Move to your own domain at any time (below). |
 
-Create the Oracle server:
+**Email password first** (the setup needs it): Google Account → *Security* → turn on *2-Step Verification* → *App passwords* → create one named "Cash Flow" and copy its 16 letters without spaces.
 
-1. https://signup.oraclecloud.com → create the account (home region cannot be changed later).
-2. *Compute → Instances → Create instance*: image **Canonical Ubuntu 24.04**, shape **VM.Standard.A1.Flex** with 2 OCPU / 12 GB RAM (inside the free allowance), boot volume 100–200 GB. Add your SSH public key.
-3. Instance → *Primary VNIC → Subnet → Default security list → Add ingress rules*: source `0.0.0.0/0`, TCP, destination ports `80,443`.
-4. Oracle's Ubuntu image also blocks ports in iptables. On the server:
+**Create the server:**
 
-   ```bash
-   sudo iptables -I INPUT 6 -p tcp -m multiport --dports 80,443 -j ACCEPT
-   sudo apt-get install -y iptables-persistent && sudo netfilter-persistent save
-   ```
-
-5. Point the `A` records for `api.<domain>` and `files.<domain>` at the instance's public IP. All images build and run on ARM.
-6. SSH in and run the setup script. It does step 4 for you, installs Docker, writes `.env` with fresh secrets and starts the stack, so section 1 is not needed:
-
-   ```bash
-   git clone https://github.com/salmonA001/cash-flow.git && cd cash-flow
-   sudo DOMAIN=example.com ADMIN_EMAIL=you@example.com \
-        SMTP_URL='smtp://<login>:<smtp-key>@smtp-relay.brevo.com:587' \
-        MAIL_FROM='Cash Flow Engine <downloads@example.com>' \
-        infrastructure/setup-server.sh
-   ```
-
-   It prints the first sign-in password and the remaining Vercel steps (section 2).
-
-Brevo: https://app.brevo.com → *Senders, Domains & Dedicated IPs* → verify the domain you send from, then *SMTP & API → SMTP* → generate an SMTP key. Set `SMTP_URL=smtp://<login>:<smtp-key>@smtp-relay.brevo.com:587`, writing the `@` in the login as `%40`, and set `MAIL_FROM` to an address on the verified domain.
-
-## 1. VPS (backend)
-
-Requirements:
-
-- Ubuntu 24.04 LTS (or any Linux with Docker Engine 27+ and the Compose plugin)
-- 2 vCPU / 4 GB RAM minimum; disk sized for design files and digital products (MinIO data)
-- DNS: `A` records for `API_DOMAIN` (`api.example.com`) and `FILES_DOMAIN` (`files.example.com`) → the VPS
-- Firewall: allow 22, 80, 443 only
+1. Sign up at https://signup.oraclecloud.com. Choose the home region carefully; it can't be changed.
+2. *Compute → Instances → Create instance*:
+   - *Image and shape*: image **Canonical Ubuntu 24.04**, shape **VM.Standard.A1.Flex** with **2 OCPU** and **12 GB** memory.
+   - *Networking*: keep "Create new virtual cloud network" and "Assign a public IPv4 address".
+   - *Add SSH keys*: "Generate a key pair for me" and save the private key (only needed for maintenance).
+   - *Boot volume*: "Specify a custom boot volume size", **150 GB** (uploaded files are stored here).
+   - *Show advanced options → Management → Initialization script*: "Paste cloud-init script" and paste the script below with your values filled in.
+   - **Create**.
+3. *Networking → Virtual cloud networks →* the new network *→ Security Lists → Default Security List → Add Ingress Rules*: source CIDR `0.0.0.0/0`, IP protocol TCP, destination port range `80,443`.
+4. Copy the instance's *Public IP address*, e.g. `129.146.10.20`. The first start builds everything and takes about 20 minutes. Then open `https://129-146-10-20.sslip.io` and sign in with your email and password.
 
 ```bash
-sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 git
-git clone <your-repo> cash-flow && cd cash-flow
-cp .env.example .env
-nano .env
+#!/bin/bash
+export HOME=/root
+export ADMIN_EMAIL='you@gmail.com'
+export ADMIN_PASSWORD='choose-12-or-more-characters'
+export SMTP_URL='smtps://you%40gmail.com:YOURAPPPASSWORD@smtp.gmail.com:465'
+export MAIL_FROM='Cash Flow Engine <you@gmail.com>'
+git clone https://github.com/salmonA001/cash-flow.git /opt/cash-flow
+cd /opt/cash-flow && infrastructure/setup-server.sh
 ```
 
-Set at least:
+In `SMTP_URL`, write the `@` of the Gmail address as `%40`. No value may contain a single quote. `infrastructure/setup-server.sh` opens ports 80 and 443 on the server, installs Docker, writes `/opt/cash-flow/.env` with fresh random secrets and starts the stack. Its output is in `/var/log/cloud-init-output.log`. Any other Ubuntu 24.04 server works the same way: run those lines as root.
 
-| Variable | Value |
-| --- | --- |
-| `APP_URL` | `https://app.example.com` (the Vercel domain — only origin allowed by CORS) |
-| `API_DOMAIN`, `API_PUBLIC_URL` | `api.example.com`, `https://api.example.com` |
-| `FILES_DOMAIN`, `MINIO_PUBLIC_ENDPOINT` | `files.example.com`, `https://files.example.com` |
-| `COOKIE_SECURE` | `true` |
-| `POSTGRES_PASSWORD` + the same in `DATABASE_URL` | `openssl rand -hex 24` |
-| `REDIS_PASSWORD` + the same in `REDIS_URL` | `openssl rand -hex 24` |
-| `JWT_SECRET`, `ENCRYPTION_KEY` | `openssl rand -base64 32` (each) |
-| `MINIO_ROOT_PASSWORD`, `MINIO_SECRET_KEY` | different random values |
-| `PRINTFUL_WEBHOOK_SECRET` | `openssl rand -hex 24` |
-| `SHOPIFY_CLIENT_ID/SECRET` | from your Shopify app |
-| `SMTP_URL`, `MAIL_FROM` | your mail provider |
-| `SEED_ADMIN_EMAIL/PASSWORD` | first owner account |
+**Your own domain later:** point `A` records for `app.example.com` and `files.example.com` at the server. In `/opt/cash-flow/.env` set `APP_DOMAIN=app.example.com`, `APP_URL` and `API_PUBLIC_URL` to `https://app.example.com`, `FILES_DOMAIN=files.example.com` and `MINIO_PUBLIC_ENDPOINT=https://files.example.com`. Then run `sudo docker compose up -d --build` in `/opt/cash-flow`. The web app is rebuilt because its API origin is fixed at build time.
 
-```bash
-docker compose up -d --build
-docker compose ps            # all healthy; migrate / minio-init / scheduler "exited (0)"
-curl https://api.example.com/health
-```
+**Shopify:** once you have created the Shopify app ([INTEGRATIONS.md](INTEGRATIONS.md)), set `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` in `.env` and run `sudo docker compose up -d`.
 
-Caddy obtains and renews Let's Encrypt certificates automatically once DNS resolves.
+## 2. First sign-in
 
-## 2. Vercel (web app) — deployed by GitHub Actions
-
-`.github/workflows/deploy-web.yml` deploys `apps/web` to Vercel on every push to the repository's **default branch** that touches the web app or its shared packages, and on demand (Actions → *Deploy web to Vercel* → *Run workflow*). It creates the Vercel project `cash-flow-web` on the first run, builds in GitHub Actions (where the whole pnpm monorepo is available) and uploads the prebuilt output. Vercel's own Git-triggered builds are turned off in `apps/web/vercel.json`, so every deployment comes from this one workflow.
-
-One-time setup:
-
-1. **Vercel token** — https://vercel.com/account/tokens → *Create*. Scope it to the account or team that should own the project.
-2. **GitHub** → repository → *Settings → Secrets and variables → Actions*:
-   - *Secrets* → **New repository secret**: `VERCEL_TOKEN` = the token.
-   - *Variables* → **New repository variable**: `NEXT_PUBLIC_API_URL` = `https://api.example.com`.
-3. *Actions* → *Deploy web to Vercel* → **Run workflow**. The run summary shows the deployment URL. The production URL is `https://cash-flow-web.vercel.app` unless that name is taken.
-4. Vercel → project `cash-flow-web` → *Settings → Domains*: add `app.example.com` and create the DNS record Vercel shows (usually a `CNAME` to `cname.vercel-dns.com`).
-5. Make sure `APP_URL` in the VPS `.env` is exactly `https://app.example.com`, and run `docker compose up -d` if you changed it.
-
-`NEXT_PUBLIC_API_URL` is inlined at build time, so changing it needs a new run. Sign-in only works on the custom domain (same site as the API), not on `*.vercel.app`.
-
-## 3. First sign-in
-
-Open `https://app.example.com`, sign in with the seed owner, then:
+Open the app (`https://<ip-with-dashes>.sslip.io`), sign in with the owner account, then:
 
 1. Settings → Organization: base currency.
-2. Settings → Integrations: connect Shopify and Printful; configure the Printful webhook URL shown there (it points at the API domain).
+2. Settings → Integrations: connect Shopify and Printful; configure the Printful webhook URL shown there.
 3. Products: map each variant to its Printful variant ID and print file, and its Shopify variant ID.
 4. Run a test order on Shopify while **demo mode** is on; confirm it appears classified with a fulfillment task. Then turn demo mode off and approve one real order.
 
-Monitoring (optional): `docker compose --profile monitoring up -d`, then `ssh -L 3001:localhost:3001 user@vps` and open http://localhost:3001 (Grafana, Prometheus datasource preconfigured).
+Monitoring (optional): `docker compose --profile monitoring up -d`, then `ssh -L 3001:localhost:3001 ubuntu@<server-ip>` and open http://localhost:3001 (Grafana, Prometheus datasource preconfigured).
 
 ## Migrations
 
@@ -125,7 +72,7 @@ The `migrate` service runs `prisma migrate deploy` and the idempotent seed on ev
 
 ```bash
 crontab -e
-# 15 2 * * *  cd /home/deploy/cash-flow && infrastructure/postgres/backup.sh >> backups/backup.log 2>&1
+# 15 2 * * *  cd /opt/cash-flow && infrastructure/postgres/backup.sh >> backups/backup.log 2>&1
 ```
 
 **Object storage** — mirror MinIO to another S3-compatible target (versioning is enabled on originals, exports, digital products and report archives):
@@ -149,15 +96,12 @@ Restore MinIO with `mc mirror offsite/cfe-backup local`. Test a restore on a sep
 
 ## Upgrades
 
-Backend (VPS):
+On the server, in `/opt/cash-flow`:
 
 ```bash
-git pull
-docker compose build
-docker compose up -d          # runs pending migrations first
+sudo git pull
+sudo docker compose up -d --build   # rebuilds web + backend, runs pending migrations first
 ```
-
-Web (Vercel): the GitHub Actions workflow redeploys on push to the default branch. Deploy the backend first when an API change and a UI change depend on each other.
 
 - **Dependencies** are pinned exactly (`.npmrc save-exact`, `pnpm-lock.yaml`). To upgrade: `pnpm up --latest <pkg>` in the relevant package, read its changelog, run `pnpm build && pnpm test && pnpm test:e2e`, commit the lockfile.
 - **Images** are pinned by tag in `docker-compose.yml`. Upgrade one at a time; take a backup before upgrading Postgres across major versions (requires dump/restore).
@@ -182,8 +126,6 @@ Web (Vercel): the GitHub Actions workflow redeploys on push to the default branc
 | Finance shows "Missing exchange rates" | Add the listed pairs in Finance → Exchange rates. |
 | Orders not arriving | Settings → Integrations event counts; `docker compose logs worker`; Shopify app → Webhooks delivery log. The hourly reconciliation also back-fills. |
 | Fulfillment stuck in `NEEDS_REVIEW` | Check the order in the Printful dashboard, then **Retry** (looks the order up before creating). |
-| Login always 401 / bounces back to /login | Web and API must share a registered domain (not `*.vercel.app`); `COOKIE_SECURE=true` requires HTTPS; `APP_URL` must exactly match the browser origin. |
-| Browser console: CORS error | `APP_URL` on the VPS must equal the web origin exactly (scheme + host, no trailing slash); restart `api` after changing it. |
-| Deploy workflow fails at "Check configuration" | Add the `VERCEL_TOKEN` secret and the `NEXT_PUBLIC_API_URL` variable in GitHub, then re-run the workflow. |
-| Deploy workflow fails creating or linking the project | The token must belong to the account or team that owns (or should own) `cash-flow-web`; create a new token there. |
+| The address does not load | Ports 80/443 open in the security list (step 3); `sudo docker compose ps` in `/opt/cash-flow`; first-boot log `/var/log/cloud-init-output.log`. |
+| Login always 401 / "Cross-origin request rejected" | Open the app at exactly `APP_URL` (scheme + host, no trailing slash); `COOKIE_SECURE=true` requires HTTPS. After changing `APP_URL`, run `sudo docker compose up -d --build`. |
 | Jobs not running | `docker compose logs worker`; Redis must use `noeviction` (set in compose). |
