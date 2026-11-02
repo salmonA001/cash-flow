@@ -27,7 +27,7 @@ Built as a **modular monolith**: Next.js web app → NestJS REST API → busines
 | Amazon Merch CSV preview/import, royalty mapping, payout reconciliation | ✅ |
 | Automation engine (12 built-in automations, custom rules, execution log, safe retry) | ✅ |
 | Web UI for all 14 sections, light/dark, responsive | ✅ Playwright-tested |
-| Vercel config for the web app (`apps/web/vercel.json`) | ✅ install/build commands verified on a clean checkout |
+| Vercel deployment via GitHub Actions (`.github/workflows/deploy-web.yml`) | ✅ `vercel build` verified on a clean checkout; first live run needs your `VERCEL_TOKEN` |
 | Docker Compose for the VPS (Postgres, Redis, MinIO, API, worker, scheduler, Caddy, monitoring) | ✅ config-validated |
 
 **Test suite:** 30 business-rule unit tests · 12 integration-SDK tests · 28 API end-to-end tests (real Postgres + Redis) · 12 worker integration tests · 11 Playwright browser tests (desktop + mobile).
@@ -95,7 +95,7 @@ The API and worker suites recreate their own `*_test` databases and refuse to to
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md):
 
 1. **VPS** — `cp .env.example .env`, fill secrets, point `api.` and `files.` DNS at the VPS, `docker compose up -d --build`. Caddy obtains HTTPS certificates automatically.
-2. **Vercel** — import the repository, set **Root Directory** to `apps/web`, add `NEXT_PUBLIC_API_URL=https://api.example.com`, and attach the custom domain `app.example.com`.
+2. **Vercel (via GitHub Actions)** — add the repository secret `VERCEL_TOKEN` and the variable `NEXT_PUBLIC_API_URL=https://api.example.com`, then run *Actions → Deploy web to Vercel*. Every later push to the default branch redeploys. Attach the custom domain `app.example.com` in Vercel.
 
 ## Repository layout
 

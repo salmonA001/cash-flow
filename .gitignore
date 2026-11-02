@@ -11,3 +11,4 @@ test-results/
 backups/
 .DS_Store
 **/.auth/
+.vercel/

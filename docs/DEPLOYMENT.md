@@ -50,22 +50,21 @@ curl https://api.example.com/health
 
 Caddy obtains and renews Let's Encrypt certificates automatically once DNS resolves.
 
-## 2. Vercel (web app)
+## 2. Vercel (web app) — deployed by GitHub Actions
 
-1. **Add New → Project** in Vercel and import this GitHub repository.
-2. **Root Directory**: `apps/web`. Leave the framework preset (Next.js) and the build and install commands alone: they come from `apps/web/vercel.json`, which installs and builds only the web app and the two shared packages it uses (`@cfe/validation`, `@cfe/shared-types`) with pinned pnpm 10.
-3. **Environment Variables** (Production, and Preview if you use it):
+`.github/workflows/deploy-web.yml` deploys `apps/web` to Vercel on every push to the repository's **default branch** that touches the web app or its shared packages, and on demand (Actions → *Deploy web to Vercel* → *Run workflow*). It creates the Vercel project `cash-flow-web` on the first run, builds in GitHub Actions (where the whole pnpm monorepo is available) and uploads the prebuilt output. Vercel's own Git-triggered builds are turned off in `apps/web/vercel.json`, so every deployment comes from this one workflow.
 
-   | Name | Value |
-   | --- | --- |
-   | `NEXT_PUBLIC_API_URL` | `https://api.example.com` |
+One-time setup:
 
-   It is inlined at build time. The build fails if it's missing, and changing it requires a redeploy.
-4. **Node.js version**: 22.x (also pinned via `engines` in `apps/web/package.json`).
-5. Deploy, then **Settings → Domains**: add `app.example.com` and create the DNS record Vercel shows (usually a `CNAME` to `cname.vercel-dns.com`).
-6. Make sure `APP_URL` in the VPS `.env` is exactly `https://app.example.com`, and run `docker compose up -d` if you changed it.
+1. **Vercel token** — https://vercel.com/account/tokens → *Create*. Scope it to the account or team that should own the project.
+2. **GitHub** → repository → *Settings → Secrets and variables → Actions*:
+   - *Secrets* → **New repository secret**: `VERCEL_TOKEN` = the token.
+   - *Variables* → **New repository variable**: `NEXT_PUBLIC_API_URL` = `https://api.example.com`.
+3. *Actions* → *Deploy web to Vercel* → **Run workflow**. The run summary shows the deployment URL. The production URL is `https://cash-flow-web.vercel.app` unless that name is taken.
+4. Vercel → project `cash-flow-web` → *Settings → Domains*: add `app.example.com` and create the DNS record Vercel shows (usually a `CNAME` to `cname.vercel-dns.com`).
+5. Make sure `APP_URL` in the VPS `.env` is exactly `https://app.example.com`, and run `docker compose up -d` if you changed it.
 
-Every push to the production branch redeploys the web app. Backend changes are deployed on the VPS (see Upgrades). Optionally, set **Ignored Build Step** in Vercel so pushes that only touch `apps/api`, `apps/worker` or `infrastructure` don't rebuild the web app.
+`NEXT_PUBLIC_API_URL` is inlined at build time, so changing it needs a new run. Sign-in only works on the custom domain (same site as the API), not on `*.vercel.app`.
 
 ## 3. First sign-in
 
@@ -120,7 +119,7 @@ docker compose build
 docker compose up -d          # runs pending migrations first
 ```
 
-Web (Vercel): redeploys automatically on push. Deploy the backend first when an API change and a UI change depend on each other.
+Web (Vercel): the GitHub Actions workflow redeploys on push to the default branch. Deploy the backend first when an API change and a UI change depend on each other.
 
 - **Dependencies** are pinned exactly (`.npmrc save-exact`, `pnpm-lock.yaml`). To upgrade: `pnpm up --latest <pkg>` in the relevant package, read its changelog, run `pnpm build && pnpm test && pnpm test:e2e`, commit the lockfile.
 - **Images** are pinned by tag in `docker-compose.yml`. Upgrade one at a time; take a backup before upgrading Postgres across major versions (requires dump/restore).
@@ -146,5 +145,6 @@ Ports bind to `127.0.0.1` only. The dev Postgres also creates the `cfe_test` and
 | Fulfillment stuck in `NEEDS_REVIEW` | Check the order in the Printful dashboard, then **Retry** (looks the order up before creating). |
 | Login always 401 / bounces back to /login | Web and API must share a registered domain (not `*.vercel.app`); `COOKIE_SECURE=true` requires HTTPS; `APP_URL` must exactly match the browser origin. |
 | Browser console: CORS error | `APP_URL` on the VPS must equal the web origin exactly (scheme + host, no trailing slash); restart `api` after changing it. |
-| Vercel build: "NEXT_PUBLIC_API_URL must be set" | Add it in Vercel → Settings → Environment Variables and redeploy. |
+| Deploy workflow fails at "Check configuration" | Add the `VERCEL_TOKEN` secret and the `NEXT_PUBLIC_API_URL` variable in GitHub, then re-run the workflow. |
+| Deploy workflow fails creating or linking the project | The token must belong to the account or team that owns (or should own) `cash-flow-web`; create a new token there. |
 | Jobs not running | `docker compose logs worker`; Redis must use `noeviction` (set in compose). |
