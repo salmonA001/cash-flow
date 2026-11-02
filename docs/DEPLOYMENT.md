@@ -9,6 +9,33 @@ The system runs in two places:
 
 **The web and API domains must be subdomains of the same registered domain.** Session cookies are `SameSite=Strict` and live on the API host; the browser only sends them when the page and the API are the same site. Vercel's `*.vercel.app` preview URLs are a different site, so you can't sign in on previews. Use the custom domain.
 
+## Free hosting
+
+Everything except the domain can run on free plans:
+
+| Part | Free plan | Limit to know |
+| --- | --- | --- |
+| Web app | Vercel **Hobby** | Non-commercial use only; move to Pro once the store sells. |
+| VPS | Oracle Cloud **Always Free** Ampere A1 (ARM) | Up to 4 OCPU / 24 GB RAM / 200 GB disk. Sign-up verifies a card without charging it. Free capacity can be out of stock in a region; retry later or pick another home region at sign-up. |
+| Email | **Brevo** free SMTP | 300 emails/day. |
+| Domain | none | Buy one (any registrar); it is the only cost. |
+
+Create the Oracle server:
+
+1. https://signup.oraclecloud.com → create the account (home region cannot be changed later).
+2. *Compute → Instances → Create instance*: image **Canonical Ubuntu 24.04**, shape **VM.Standard.A1.Flex** with 2 OCPU / 12 GB RAM (inside the free allowance), boot volume 100–200 GB. Add your SSH public key.
+3. Instance → *Primary VNIC → Subnet → Default security list → Add ingress rules*: source `0.0.0.0/0`, TCP, destination ports `80,443`.
+4. Oracle's Ubuntu image also blocks ports in iptables. On the server:
+
+   ```bash
+   sudo iptables -I INPUT 6 -p tcp -m multiport --dports 80,443 -j ACCEPT
+   sudo apt-get install -y iptables-persistent && sudo netfilter-persistent save
+   ```
+
+5. Point the `A` records for `API_DOMAIN` and `FILES_DOMAIN` at the instance's public IP, then continue with section 1. All images build and run on ARM.
+
+Brevo: https://app.brevo.com → *Senders, Domains & Dedicated IPs* → verify the domain you send from, then *SMTP & API → SMTP* → generate an SMTP key. Set `SMTP_URL=smtp://<login>:<smtp-key>@smtp-relay.brevo.com:587`, writing the `@` in the login as `%40`, and set `MAIL_FROM` to an address on the verified domain.
+
 ## 1. VPS (backend)
 
 Requirements:
