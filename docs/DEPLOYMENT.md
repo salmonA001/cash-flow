@@ -123,7 +123,12 @@ Web (Vercel): the GitHub Actions workflow redeploys on push to the default branc
 
 - **Dependencies** are pinned exactly (`.npmrc save-exact`, `pnpm-lock.yaml`). To upgrade: `pnpm up --latest <pkg>` in the relevant package, read its changelog, run `pnpm build && pnpm test && pnpm test:e2e`, commit the lockfile.
 - **Images** are pinned by tag in `docker-compose.yml`. Upgrade one at a time; take a backup before upgrading Postgres across major versions (requires dump/restore).
+- **MinIO** no longer publishes community images, so `infrastructure/minio/Dockerfile` compiles the server and `mc` from their official GitHub source. To upgrade, set `MINIO_RELEASE` / `MC_RELEASE` to newer release tags and run `docker compose build minio`.
 - **Shopify API version**: see [INTEGRATIONS.md](INTEGRATIONS.md#upgrading-the-shopify-api-version).
+
+## Running everything on your own computer
+
+`docker compose -f docker-compose.local.yml up --build` runs the complete system (web, API, worker, PostgreSQL, Redis, MinIO, a Mailpit inbox) on `localhost` with no `.env` file. See the README for addresses and the sign-in. It is for local use only; it has public passwords and listens on `127.0.0.1`.
 
 ## Local development with Docker dependencies
 

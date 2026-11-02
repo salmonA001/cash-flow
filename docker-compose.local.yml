@@ -1,0 +1,147 @@
+# Run the whole system on your own computer — no domain, server or .env needed.
+#
+#   docker compose -f docker-compose.local.yml up --build
+#
+# Then open http://localhost:3000 and sign in with  owner@example.com / local-password-123
+#   Email inbox (download links): http://localhost:8025
+#   MinIO console:                http://localhost:9001  (cfe-admin / local-minio-admin)
+#
+# FOR LOCAL USE ONLY. The secrets below are public, every port is bound to 127.0.0.1, and the
+# organization starts in demo mode (no live Printful orders). Shopify/Printful webhooks cannot
+# reach localhost; use the VPS + Vercel setup (docs/DEPLOYMENT.md) for real store traffic.
+name: cash-flow-local
+
+x-app-env: &app-env
+  NODE_ENV: production
+  APP_URL: http://localhost:3000
+  API_PUBLIC_URL: http://localhost:4000
+  COOKIE_SECURE: "false"
+  DATABASE_URL: postgresql://cfe:cfe-local@postgres:5432/cfe?schema=public
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: local-only-jwt-secret-do-not-use-in-production
+  ENCRYPTION_KEY: bG9jYWwtb25seS1lbmNyeXB0aW9uLWtleS0zMmJ5dGU=
+  MINIO_ENDPOINT: http://minio:9000
+  MINIO_PUBLIC_ENDPOINT: http://localhost:9000
+  MINIO_ACCESS_KEY: cfe-app
+  MINIO_SECRET_KEY: local-minio-app-password
+  MINIO_REGION: us-east-1
+  SHOPIFY_CLIENT_ID: not-configured-locally
+  SHOPIFY_CLIENT_SECRET: not-configured-locally
+  PRINTFUL_WEBHOOK_SECRET: local-only-printful-webhook-secret
+  SMTP_URL: smtp://mailpit:1025
+  MAIL_FROM: Cash Flow Engine <downloads@example.com>
+  SEED_ORG_NAME: Cash Flow Engine
+  SEED_ADMIN_EMAIL: owner@example.com
+  SEED_ADMIN_PASSWORD: local-password-123
+
+x-backend: &backend
+  image: cfe-backend:local
+  build:
+    context: .
+    dockerfile: infrastructure/docker/Dockerfile
+    target: backend
+  environment: *app-env
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment: { POSTGRES_USER: cfe, POSTGRES_PASSWORD: cfe-local, POSTGRES_DB: cfe }
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cfe -d cfe"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.6-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  minio:
+    image: cfe-minio:local
+    build: infrastructure/minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment: { MINIO_ROOT_USER: cfe-admin, MINIO_ROOT_PASSWORD: local-minio-admin }
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    volumes: [minio-data:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  minio-init:
+    image: cfe-minio:local
+    build: infrastructure/minio
+    depends_on: { minio: { condition: service_healthy } }
+    entrypoint: ["/bin/sh", "/init.sh"]
+    volumes: ["./infrastructure/minio/init.sh:/init.sh:ro"]
+    environment:
+      MINIO_ROOT_USER: cfe-admin
+      MINIO_ROOT_PASSWORD: local-minio-admin
+      MINIO_ACCESS_KEY: cfe-app
+      MINIO_SECRET_KEY: local-minio-app-password
+
+  mailpit:
+    image: axllent/mailpit:v1.27.10
+    ports: ["127.0.0.1:8025:8025"]
+    restart: unless-stopped
+
+  migrate:
+    <<: *backend
+    command: ["sh", "-c", "cd packages/database && node node_modules/prisma/build/index.js migrate deploy && node dist/seed.js"]
+    restart: "no"
+    depends_on: { postgres: { condition: service_healthy } }
+
+  api:
+    <<: *backend
+    command: ["node", "apps/api/dist/main.js"]
+    ports: ["127.0.0.1:4000:4000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      retries: 10
+      start_period: 15s
+
+  worker:
+    <<: *backend
+    command: ["node", "apps/worker/dist/main.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      mailpit: { condition: service_started }
+
+  scheduler:
+    <<: *backend
+    command: ["node", "apps/worker/dist/scheduler.js"]
+    restart: "no"
+    depends_on: { redis: { condition: service_healthy } }
+
+  web:
+    image: cfe-web:local
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: { api: { condition: service_healthy } }
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

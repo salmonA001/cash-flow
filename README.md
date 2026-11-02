@@ -10,7 +10,7 @@ A self-hosted operating system for a print-on-demand and digital-commerce busine
 
 Built as a **modular monolith**: Next.js web app → NestJS REST API → business modules → provider adapters, with BullMQ workers for everything that touches the outside world.
 
-**Hosting:** the web app runs on **Vercel**; the API, worker, PostgreSQL, Redis and MinIO run on your **VPS** with Docker Compose. The two must share a registered domain (e.g. `app.example.com` on Vercel, `api.example.com` on the VPS).
+**Run it on your computer** with one command (below). **For real store traffic**, the web app runs on **Vercel** and the API, worker, PostgreSQL, Redis and MinIO run on your **VPS** with Docker Compose. The two must share a registered domain (e.g. `app.example.com` on Vercel, `api.example.com` on the VPS).
 
 ## Status: Stage 1 (foundation) — complete and tested
 
@@ -28,13 +28,37 @@ Built as a **modular monolith**: Next.js web app → NestJS REST API → busines
 | Automation engine (12 built-in automations, custom rules, execution log, safe retry) | ✅ |
 | Web UI for all 14 sections, light/dark, responsive | ✅ Playwright-tested |
 | Vercel deployment via GitHub Actions (`.github/workflows/deploy-web.yml`) | ✅ `vercel build` verified on a clean checkout; first live run needs your `VERCEL_TOKEN` |
-| Docker Compose for the VPS (Postgres, Redis, MinIO, API, worker, scheduler, Caddy, monitoring) | ✅ config-validated |
+| One-command local stack (`docker-compose.local.yml`) | ✅ built and run end to end: browser suite, real MinIO uploads + presigned downloads, worker email delivery, download limits, Amazon import, restart persistence |
+| MinIO image built from official source (Docker Hub images were withdrawn) | ✅ |
+| Docker Compose for the VPS (Postgres, Redis, MinIO, API, worker, scheduler, Caddy, monitoring) | ✅ config-validated (same images as the local stack) |
 
 **Test suite:** 30 business-rule unit tests · 12 integration-SDK tests · 28 API end-to-end tests (real Postgres + Redis) · 12 worker integration tests · 11 Playwright browser tests (desktop + mobile).
 
-**Not yet verified against live services:** Shopify, Printful and SMTP are exercised through test doubles; MinIO through an in-memory double; the Docker images have not been built in CI, and no Vercel deployment has been made yet. Do a staging run with real sandbox credentials before turning off demo mode. See [Next stages](#next-stages).
+**Not yet verified against live services:** Shopify and Printful are exercised through test doubles, and no Vercel deployment has been made yet. Do a staging run with real sandbox credentials before turning off demo mode. See [Next stages](#next-stages).
 
-## Quick start (local development)
+## Run it on your computer (one command)
+
+Prerequisite: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS) or Docker Engine (Linux).
+
+```bash
+git clone https://github.com/salmonA001/cash-flow.git
+cd cash-flow
+docker compose -f docker-compose.local.yml up --build
+```
+
+The first build takes a few minutes (it compiles MinIO from source). Then open:
+
+| What | Address | Sign in |
+| --- | --- | --- |
+| **The app** | http://localhost:3000 | `owner@example.com` / `local-password-123` |
+| Email inbox (download links) | http://localhost:8025 | — |
+| File storage console | http://localhost:9001 | `cfe-admin` / `local-minio-admin` |
+
+Stop with `Ctrl+C` (or `docker compose -f docker-compose.local.yml down`). Your data is kept in Docker volumes; add `-v` to `down` to erase it.
+
+This is for your own computer only: its passwords are public, every port listens on `127.0.0.1` only, and the organization starts in demo mode. Shopify and Printful can't send webhooks to `localhost`, so live store orders need the VPS + Vercel setup in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Development (hot reload)
 
 Prerequisites: Node.js ≥ 22.9, pnpm 10 (`corepack enable`), Docker.
 
