@@ -3,12 +3,12 @@
 ## Components
 
 ```
-              app.example.com (Vercel)            api.example.com / files.example.com (VPS)
-              ┌─────────────────┐                 ┌──────────── Caddy (HTTPS) ────────────┐
- Browser ────►│  web (Next.js)  │   UI assets     │ api.   /api/*, /health → api          │
-    │         └─────────────────┘                 │ files. → minio:9000 (presigned GET)   │
-    │   fetch + cookies (same-site, CORS)         └──────────┬────────────────────────────┘
-    └──────────────────────────────────────────────────────►│
+                                     app.example.com + files.example.com — one server
+                                                  ┌──────────── Caddy (HTTPS) ────────────┐
+ Browser ────────────────────────────────────────►│ app.   /api/*, /health → api          │
+   pages, and fetch with cookies (same origin)    │ app.   everything else → web          │──► web (Next.js)
+                                                  │ files. → minio:9000 (presigned GET)   │
+                                                  └──────┬────────────────────────────────┘
                                                   ┌──────▼──────┐
                                                   │  api        │  NestJS, /api/v1
                                                   │  REST + auth│
@@ -28,7 +28,7 @@
 
 | Component | Responsibility |
 | --- | --- |
-| `apps/web` | UI only, hosted on Vercel. Calls the API directly at `NEXT_PUBLIC_API_URL` with credentials. Web and API are same-site subdomains, so `SameSite=Strict` session cookies (set on the API host) are sent; CORS allows only `APP_URL`. |
+| `apps/web` | UI only, served by the `web` container behind Caddy. Calls the API on its own origin (`NEXT_PUBLIC_API_URL` = `APP_URL`), so the `SameSite=Strict` session cookies are first-party. |
 | `apps/api` | HTTP: authentication, authorization, validation, reads, and state changes that need no external call. Anything that calls a provider is **enqueued**. |
 | `apps/worker` | All external side effects and ingestion: Shopify order sync, Printful submission/sync, entitlement grants + email, Amazon imports, reconciliation. |
 | `apps/worker` scheduler | Registers repeatable maintenance jobs, then exits. |
@@ -90,7 +90,7 @@ Every automation writes an `AutomationRun` (status, input, output, error). Core 
 
 ## Key decisions
 
-- **Web on Vercel, backend on the VPS** — Vercel serves the UI; long-running workers, Redis queues, Postgres and MinIO need a persistent host. The browser calls the API directly rather than through a Vercel rewrite: uploads up to 500 MB exceed Vercel's proxied request-body limit, and proxying would hide client IPs from the rate limiter.
+- **One server, one origin** — long-running workers, Redis queues, Postgres and MinIO need a persistent host anyway, so the web app runs there too. Caddy serves the UI and the API on one origin: session cookies are first-party, uploads up to 500 MB reach the API directly, and the whole system fits one free server (Oracle Always Free) with no domain to buy.
 - **Modular monolith** — one deployable per role, shared packages instead of network boundaries.
 - **Provider payloads are references, not truth** — the worker always re-reads provider state.
 - **Idempotency at the database** — unique constraints on provider IDs and row hashes, compare-and-set state transitions.

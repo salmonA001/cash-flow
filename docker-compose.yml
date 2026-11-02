@@ -1,5 +1,5 @@
-# Cash Flow Engine OS — backend stack for the VPS. The web app is hosted on Vercel (see docs/DEPLOYMENT.md).
-# Usage: cp .env.example .env  (fill in secrets)  →  docker compose up -d --build
+# Cash Flow Engine OS — the whole system on one server, behind Caddy (see docs/DEPLOYMENT.md).
+# Usage: infrastructure/setup-server.sh writes .env and runs  docker compose up -d --build
 # Optional monitoring: docker compose --profile monitoring up -d
 # Image tags are pinned; see docs/DEPLOYMENT.md → "Upgrades" before changing them.
 
@@ -110,19 +110,32 @@ services:
     depends_on:
       redis: { condition: service_healthy }
 
+  web:
+    # Not cfe-web:local: that image (docker-compose.local.yml) has the localhost API URL baked in.
+    image: cfe-web:server
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+      target: web
+      args:
+        # The browser calls the API on the app's own origin (Caddy routes /api/* to the api service).
+        NEXT_PUBLIC_API_URL: ${APP_URL}
+    restart: unless-stopped
+    networks: [internal]
+
   caddy:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
-      API_DOMAIN: ${API_DOMAIN}
+      APP_DOMAIN: ${APP_DOMAIN}
       FILES_DOMAIN: ${FILES_DOMAIN}
     volumes:
       - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     networks: [internal]
-    depends_on: [api, minio]
+    depends_on: [api, web, minio]
 
   prometheus:
     image: prom/prometheus:v3.6.0

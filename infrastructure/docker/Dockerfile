@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Targets:
 #   backend — api, worker, scheduler and migrate (different commands, same image)
-#   web     — Next.js app for running on your own computer (docker-compose.local.yml).
-#             In production the web app is hosted on Vercel instead.
+#   web     — Next.js app (docker-compose.yml behind Caddy, docker-compose.local.yml on localhost)
 
 FROM node:22.21.0-bookworm-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*

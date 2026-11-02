@@ -8,7 +8,7 @@
 #
 # FOR LOCAL USE ONLY. The secrets below are public, every port is bound to 127.0.0.1, and the
 # organization starts in demo mode (no live Printful orders). Shopify/Printful webhooks cannot
-# reach localhost; use the VPS + Vercel setup (docs/DEPLOYMENT.md) for real store traffic.
+# reach localhost; use the server setup (docs/DEPLOYMENT.md) for real store traffic.
 name: cash-flow-local
 
 x-app-env: &app-env

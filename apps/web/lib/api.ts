@@ -6,7 +6,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Public API origin, e.g. https://api.example.com (inlined at build; checked in next.config). */
+/** API origin: the app's own origin in production, http://localhost:4000 locally (inlined at build; checked in next.config). */
 export const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 let refreshing: Promise<boolean> | null = null;
@@ -22,8 +22,8 @@ export async function refreshSession(): Promise<boolean> {
 }
 
 /**
- * API client. Session cookies live on the API host and are sent cross-origin (same-site) with
- * credentials. On 401 it rotates the session once; if that fails the user is sent to /login.
+ * API client. Session cookies live on the API host (in production the app's own origin) and are
+ * sent with credentials. On 401 it rotates the session once; if that fails the user is sent to /login.
  */
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}, retried = false): Promise<T> {
   const { json, headers, ...rest } = init;

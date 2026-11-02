@@ -1,13 +1,12 @@
-# The web app is hosted on Vercel (app domain). This VPS serves the API and object storage.
+# The whole system is served by this one server.
 
-# API: called directly by the browser from the app domain (same site → session cookies work).
-{$API_DOMAIN} {
+# Web app, with the API on the same origin (first-party SameSite=Strict session cookies).
+{$APP_DOMAIN} {
 	encode zstd gzip
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
-		Referrer-Policy "no-referrer"
 		-Server
 	}
 
@@ -22,9 +21,10 @@
 	handle /health {
 		reverse_proxy api:4000
 	}
-	# Everything else — including /metrics, scraped by Prometheus on the internal network — is not exposed.
+	# Everything else is the web app. The API's /metrics (scraped by Prometheus on the internal
+	# network) is never routed here.
 	handle {
-		respond 404
+		reverse_proxy web:3000
 	}
 }
 

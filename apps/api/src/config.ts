@@ -3,9 +3,9 @@ import { z } from 'zod';
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().default(4000),
-  /** Public origin of the web app (Vercel). The only origin allowed by CORS and the CSRF origin check. */
+  /** Public origin of the web app. The only origin allowed by CORS and the CSRF origin check. */
   APP_URL: z.url(),
-  /** Public URL of this API (e.g. https://api.example.com). Used for webhook and OAuth callback URLs. */
+  /** Public URL of this API (in production the same as APP_URL). Used for webhook and OAuth callback URLs. */
   API_PUBLIC_URL: z.url(),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
