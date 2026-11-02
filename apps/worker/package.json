@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "tsc -p tsconfig.build.json && node --env-file-if-exists=../../.env --enable-source-maps dist/main.js",
-    "dev:scheduler": "tsc -p tsconfig.build.json && node --env-file-if-exists=../../.env dist/scheduler.js",
+    "dev": "node --env-file-if-exists=../../.env --enable-source-maps --watch --watch-preserve-output dist/main.js",
+    "dev:scheduler": "node --env-file-if-exists=../../.env dist/scheduler.js",
     "start": "node dist/main.js",
     "start:scheduler": "node dist/scheduler.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:build": "tsc -p tsconfig.build.json --watch --preserveWatchOutput"
   },
   "dependencies": {
     "@cfe/business-rules": "workspace:*",

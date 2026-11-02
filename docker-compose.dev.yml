@@ -1,15 +1,17 @@
-# Local development dependencies only. Run the apps with pnpm on the host.
-# Usage: docker compose -f docker-compose.dev.yml up -d
+# Local development dependencies only; the apps run on the host with hot reload.
+# Started automatically by `npm run dev` (scripts/dev.mjs).
 services:
   postgres:
     image: postgres:16.10-alpine
     environment: { POSTGRES_USER: cfe, POSTGRES_PASSWORD: cfe, POSTGRES_DB: cfe }
     ports: ["127.0.0.1:5432:5432"]
     volumes: [dev-postgres:/var/lib/postgresql/data, ./infrastructure/postgres/dev-init.sql:/docker-entrypoint-initdb.d/dev-init.sql:ro]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U cfe -d cfe"], interval: 3s, retries: 30 }
   redis:
     image: redis:7.4.6-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports: ["127.0.0.1:6379:6379"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 3s, retries: 30 }
   minio:
     image: cfe-minio:local
     build: infrastructure/minio

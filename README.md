@@ -60,56 +60,28 @@ This is for your own computer only: its passwords are public, every port listens
 
 ## Development (hot reload)
 
-Prerequisites: Node.js ≥ 22.9, pnpm 10 (`corepack enable`), Docker.
-
-**Linux / macOS**
+Prerequisites: [Node.js 22.9+](https://nodejs.org) and Docker Desktop (running).
 
 ```bash
-cp .env.example .env
-# For local dev, set in .env:
-#   DATABASE_URL=postgresql://cfe:cfe@localhost:5432/cfe?schema=public
-#   REDIS_URL=redis://localhost:6379/0
-#   MINIO_ENDPOINT=http://localhost:9000  MINIO_PUBLIC_ENDPOINT=http://localhost:9000
-#   MINIO_ACCESS_KEY=cfe-app  MINIO_SECRET_KEY=cfe-app-dev-password
-#   SMTP_URL=smtp://localhost:1025
-#   APP_URL=http://localhost:3000  API_PUBLIC_URL=http://localhost:4000  NEXT_PUBLIC_API_URL=http://localhost:4000
-#   JWT_SECRET / ENCRYPTION_KEY: openssl rand -base64 32
-docker compose -f docker-compose.dev.yml up -d   # Postgres, Redis, MinIO, Mailpit
-pnpm install
-pnpm build
-pnpm db:deploy && pnpm db:seed
-pnpm dev:api        # terminal 1 → http://localhost:4000
-pnpm dev:worker     # terminal 2
-pnpm dev:scheduler  # once, registers maintenance schedules
-pnpm dev:web        # terminal 3 → http://localhost:3000
+npm run dev
 ```
 
-**Windows (PowerShell)**
+That one command (Windows, macOS and Linux):
 
-```powershell
-Copy-Item .env.example .env
-# Edit .env as above. Generate secrets with:
-#   [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
-docker compose -f docker-compose.dev.yml up -d
-corepack enable
-pnpm install
-pnpm build
-pnpm db:deploy; pnpm db:seed
-pnpm dev:api      # separate PowerShell windows for each
-pnpm dev:worker
-pnpm dev:scheduler
-pnpm dev:web
-```
+1. creates `.env` with local settings and fresh secrets, the first time only (an existing `.env` is never changed);
+2. starts PostgreSQL, Redis, MinIO and Mailpit in Docker (`docker-compose.dev.yml`);
+3. installs dependencies (pnpm via corepack: no global install, no `npm install` needed), builds the shared packages, applies migrations and seeds the owner account;
+4. runs the API, worker and web app with hot reload, with output prefixed `api │`, `worker │` and `web │`.
 
-Sign in with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`. The organization starts in **demo mode**: no live external action (Printful submission) can run until you switch it off in Settings.
+Then open http://localhost:3000 and sign in with `owner@example.com` / `local-password-123`. Download-link emails go to http://localhost:8025.
 
-Download-link emails land in Mailpit at http://localhost:8025.
+`Ctrl+C` stops the apps; the databases keep running for a fast restart. Stop them with `docker compose -f docker-compose.dev.yml down` (add `-v` to erase local data). After changing anything in `packages/`, restart `npm run dev` so the shared packages are rebuilt.
 
 ## Tests
 
 ```bash
-pnpm test        # unit + integration (needs the dev Postgres + Redis; uses cfe_test / cfe_worker_test DBs)
-pnpm test:e2e    # Playwright against a running stack (E2E_EMAIL / E2E_PASSWORD = seeded owner)
+corepack pnpm test       # unit + integration (needs the dev Postgres + Redis from `npm run dev`; uses cfe_test / cfe_worker_test DBs)
+corepack pnpm test:e2e   # Playwright against a running app (E2E_EMAIL / E2E_PASSWORD = seeded owner)
 ```
 
 The API and worker suites recreate their own `*_test` databases and refuse to touch any other database.

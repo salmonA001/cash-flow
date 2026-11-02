@@ -13,6 +13,8 @@ on:
   push:
     paths:
       - apps/web/**
+      - '!apps/web/e2e/**'
+      - '!apps/web/playwright.config.ts'
       - packages/validation/**
       - packages/shared-types/**
       - package.json

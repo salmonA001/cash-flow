@@ -6,6 +6,7 @@ setup('sign in once', async ({ page }) => {
   await page.getByLabel('Email').fill(EMAIL);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/dashboard/);
+  // Generous: against `npm run dev`, Next.js compiles the dashboard on first visit.
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 60_000 });
   await page.context().storageState({ path: 'e2e/.auth/owner.json' });
 });

@@ -168,13 +168,9 @@ Web (Vercel): the GitHub Actions workflow redeploys on push to the default branc
 
 `docker compose -f docker-compose.local.yml up --build` runs the complete system (web, API, worker, PostgreSQL, Redis, MinIO, a Mailpit inbox) on `localhost` with no `.env` file. See the README for addresses and the sign-in. It is for local use only; it has public passwords and listens on `127.0.0.1`.
 
-## Local development with Docker dependencies
+## Local development (hot reload)
 
-```bash
-docker compose -f docker-compose.dev.yml up -d   # Postgres, Redis, MinIO (+ init), Mailpit
-```
-
-Ports bind to `127.0.0.1` only. The dev Postgres also creates the `cfe_test` and `cfe_worker_test` databases used by the test suites. See the README for the full Linux and PowerShell command sequence.
+`npm run dev` (see the README) starts the Docker dependencies from `docker-compose.dev.yml`, prepares `.env`, the database and storage, and runs the API, worker and web app with hot reload. Ports bind to `127.0.0.1` only. The dev Postgres also creates the `cfe_test` and `cfe_worker_test` databases used by the test suites.
 
 ## Troubleshooting
 

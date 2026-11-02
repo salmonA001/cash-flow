@@ -18,6 +18,7 @@ const PAGES: [string, string][] = [
 ];
 
 test('every section renders without errors or horizontal overflow', async ({ page }) => {
+  test.setTimeout(180_000); // 14 pages; each compiles on first visit under `npm run dev`
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   for (const [path, heading] of PAGES) {
