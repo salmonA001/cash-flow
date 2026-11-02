@@ -32,7 +32,18 @@ Create the Oracle server:
    sudo apt-get install -y iptables-persistent && sudo netfilter-persistent save
    ```
 
-5. Point the `A` records for `API_DOMAIN` and `FILES_DOMAIN` at the instance's public IP, then continue with section 1. All images build and run on ARM.
+5. Point the `A` records for `api.<domain>` and `files.<domain>` at the instance's public IP. All images build and run on ARM.
+6. SSH in and run the setup script. It does step 4 for you, installs Docker, writes `.env` with fresh secrets and starts the stack, so section 1 is not needed:
+
+   ```bash
+   git clone https://github.com/salmonA001/cash-flow.git && cd cash-flow
+   sudo DOMAIN=example.com ADMIN_EMAIL=you@example.com \
+        SMTP_URL='smtp://<login>:<smtp-key>@smtp-relay.brevo.com:587' \
+        MAIL_FROM='Cash Flow Engine <downloads@example.com>' \
+        infrastructure/setup-server.sh
+   ```
+
+   It prints the first sign-in password and the remaining Vercel steps (section 2).
 
 Brevo: https://app.brevo.com → *Senders, Domains & Dedicated IPs* → verify the domain you send from, then *SMTP & API → SMTP* → generate an SMTP key. Set `SMTP_URL=smtp://<login>:<smtp-key>@smtp-relay.brevo.com:587`, writing the `@` in the login as `%40`, and set `MAIL_FROM` to an address on the verified domain.
 
