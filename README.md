@@ -10,7 +10,7 @@ A self-hosted operating system for a print-on-demand and digital-commerce busine
 
 Built as a **modular monolith**: Next.js web app → NestJS REST API → business modules → provider adapters, with BullMQ workers for everything that touches the outside world.
 
-**Run it on your computer** with one command (below). **For real store traffic**, the web app runs on **Vercel** and the API, worker, PostgreSQL, Redis and MinIO run on your **VPS** with Docker Compose. The two must share a registered domain (e.g. `app.example.com` on Vercel, `api.example.com` on the VPS).
+**Run it on your computer** with one command (below). **For real store traffic**, the web app runs on **Vercel** and the API, worker, PostgreSQL, Redis and MinIO run on your **VPS** with Docker Compose. The two must share a registered domain (e.g. `app.example.com` on Vercel, `api.example.com` on the VPS). Both can run on free plans (Vercel Hobby + Oracle Cloud Always Free); only the domain costs money. See [docs/DEPLOYMENT.md → Free hosting](docs/DEPLOYMENT.md#free-hosting).
 
 ## Status: Stage 1 (foundation) — complete and tested
 
