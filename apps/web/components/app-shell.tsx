@@ -1,6 +1,6 @@
 'use client';
 import {
-  BarChart3, Bell, Boxes, Download, Factory, FolderKanban, LayoutDashboard, LogOut, Menu, Moon, Palette,
+  BarChart3, Bell, Boxes, Download, Droplets, Factory, FolderKanban, LayoutDashboard, LogOut, Menu, Moon, Palette,
   Receipt, Settings, ShoppingBag, Store, Sun, Tags, Users, Workflow, X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -46,6 +46,7 @@ const NAV: { group: string; items: { href: string; label: string; icon: ReactNod
     items: [
       { href: '/automation', label: 'Automation', icon: <Workflow /> },
       { href: '/settings', label: 'Settings', icon: <Settings /> },
+      { href: '/playground', label: 'Playground', icon: <Droplets /> },
     ],
   },
 ];

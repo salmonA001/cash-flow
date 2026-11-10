@@ -38,14 +38,16 @@ Four units, each with one job.
 
 Pure TypeScript. No three.js, no React, no DOM.
 
-- `createFluid(params)` returns a fluid: particle positions and velocities in
-  `Float32Array`s, a live particle count, and the tank half-extents.
-- `step(fluid, dt, gravity, params)` advances one fixed time step. `gravity` is a
-  3-vector already expressed in tank space.
-- `pour(fluid, count)` adds particles at the top centre, up to the limit.
-- `push(fluid, origin, direction, radius, strength)` adds velocity to particles
-  near a ray; used for stirring and shaking.
-- `reset(fluid)` restores the initial block of liquid.
+- `new Fluid(limit)` holds particle positions and velocities in `Float32Array`s,
+  a live particle count, and the tank half-extents. It starts with 60% of the
+  limit as a block of liquid at rest; the remainder can be poured in.
+- `step(dt, gravity, viscosity)` advances one time step. `gravity` is a 3-vector
+  already expressed in tank space. The solver is tuned for the exported `STEP`
+  (1/60 s), which is the only step the scene uses.
+- `pour(amount)` adds particles at the top centre, up to the limit.
+- `push(origin, direction, radius, impulse)` adds velocity to particles near a
+  ray; used for stirring.
+- `reset()` restores the initial block of liquid.
 
 Solver: particle-based viscoelastic fluid using double density relaxation
 (Clavet, Beaudoin, Poulin 2005), with a uniform grid for neighbour lookup and
@@ -54,7 +56,8 @@ stable at large time steps and cheap enough for 8,000 particles on the main
 thread.
 
 The tank is always an axis-aligned box in simulation space. Tilting never moves
-the box; it rotates the gravity vector instead.
+the box; it rotates the gravity vector instead. Shaking adds a short sideways
+acceleration to that same vector while the scene slides the tank to match.
 
 ### `apps/web/components/playground/fluid-scene.tsx`
 
@@ -69,8 +72,8 @@ Client component owning the three.js canvas.
   tank; when the pointer starts inside the tank, orbit is disabled for that drag).
 - Throws if a WebGL context cannot be created. There is no 2D fallback.
 
-Props: the parameter values, tilt angles, paused flag, and a ref handle exposing
-`pour`, `shake` and `reset`.
+Props: the parameter values, tilt angles, paused and pouring flags, a callback
+reporting the particle count, and a ref handle exposing `shake` and `reset`.
 
 ### `apps/web/components/playground/controls.tsx`
 
@@ -78,11 +81,16 @@ The panel of sliders and buttons from the table above, built from the existing
 `components/ui` primitives and Tailwind classes. Stateless: values and change
 handlers come from the page.
 
-### `apps/web/app/playground/page.tsx`
+### `apps/web/components/playground/playground.tsx`
 
-Client page holding the parameter state and composing the scene and the controls.
+Client component holding the parameter state and composing the scene and the controls.
 The scene fills the viewport; the controls sit in a panel at the side on wide
 screens and below the scene on narrow ones.
+
+### `apps/web/app/playground/page.tsx` and `error.tsx`
+
+The page sets the title and renders the playground. The error boundary shows a
+message when the scene cannot start, for example without WebGL.
 
 ### Navigation
 
