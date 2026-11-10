@@ -14,8 +14,10 @@ const INITIAL_FRACTION = 0.6;
 export const STEP = 1 / 60;
 
 const REST_DENSITY = 3;
-const STIFFNESS = 50;
-const NEAR_STIFFNESS = 120;
+// Stiffness scales with the interaction radius so the per-step correction stays a fixed share of it
+// at every particle limit.
+const STIFFNESS_PER_RADIUS = 365;
+const NEAR_STIFFNESS_PER_RADIUS = 876;
 /** Linear viscosity coefficient (1/s) at viscosity = 1. */
 const VISCOSITY_SCALE = 60;
 const POUR_SPEED = 2;
@@ -172,8 +174,8 @@ export class Fluid {
         density += a * a;
         nearDensity += a * a * a;
       }
-      const pressure = STIFFNESS * (density - REST_DENSITY);
-      const nearPressure = NEAR_STIFFNESS * nearDensity;
+      const pressure = STIFFNESS_PER_RADIUS * this.h * (density - REST_DENSITY);
+      const nearPressure = NEAR_STIFFNESS_PER_RADIUS * this.h * nearDensity;
       let mx = 0;
       let my = 0;
       let mz = 0;

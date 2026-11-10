@@ -79,7 +79,7 @@ export function Controls({ settings, onChange, count, paused, onPausedChange, on
       <Slider label="Tilt forward / back" display={`${settings.tiltX}°`} min={-45} max={45} step={1} value={settings.tiltX} onChange={(tiltX) => set({ tiltX })} />
       <Slider label="Gravity" display={`${settings.gravity.toFixed(1)} m/s²`} min={0} max={20} step={0.1} value={settings.gravity} onChange={(gravity) => set({ gravity })} />
       <Slider label="Viscosity" display={settings.viscosity.toFixed(2)} min={0} max={1} step={0.01} value={settings.viscosity} onChange={(viscosity) => set({ viscosity })} />
-      <Slider label="Particle limit" display={settings.limit.toLocaleString('en-US')} min={1000} max={8000} step={500} value={settings.limit} onChange={(limit) => set({ limit })} />
+      <Slider label="Particle limit" display={settings.limit.toLocaleString('en-US')} min={1000} max={20000} step={1000} value={settings.limit} onChange={(limit) => set({ limit })} />
 
       <p className="text-xs text-muted-foreground">Drag the tank to stir the liquid. Drag outside it to orbit, scroll to zoom. Changing the particle limit refills the tank.</p>
     </div>

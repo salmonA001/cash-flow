@@ -26,7 +26,7 @@ business data and no API calls.
 | Stir | Drag inside the tank: particles near the pointer ray are pushed along the drag direction |
 | Gravity | Slider, 0 to 20 m/s², default 9.8 |
 | Viscosity | Slider, 0 to 1, default 0.1 |
-| Particle limit | Slider, 1,000 to 8,000, default 5,000; changing it resets the tank |
+| Particle limit | Slider, 1,000 to 20,000, default 5,000; changing it resets the tank |
 | Pause / resume | Button |
 | Reset | Button: refills the tank with a block of liquid at rest |
 
@@ -52,7 +52,7 @@ Pure TypeScript. No three.js, no React, no DOM.
 Solver: particle-based viscoelastic fluid using double density relaxation
 (Clavet, Beaudoin, Poulin 2005), with a uniform grid for neighbour lookup and
 the tank walls enforced as position clamps with velocity damping. This method is
-stable at large time steps and cheap enough for 8,000 particles on the main
+stable at large time steps and cheap enough for several thousand particles on the main
 thread.
 
 The tank is always an axis-aligned box in simulation space. Tilting never moves

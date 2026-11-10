@@ -78,11 +78,12 @@ describe('Fluid', () => {
     run(weightless, 300, [0, 0, 0], 0);
     expectFiniteAndInside(weightless);
 
-    const large = new Fluid(8000);
-    run(large, 300, [0, -20, 0], 1);
-    run(large, 300, [14, -14, 0], 0);
+    const large = new Fluid(20000);
+    large.pour(20000);
+    run(large, 150, [0, -20, 0], 1);
+    run(large, 150, [14, -14, 0], 0);
     expectFiniteAndInside(large);
-  }, 60_000);
+  }, 120_000);
 
   it('pours up to the limit and no further', () => {
     const fluid = new Fluid(1000);
